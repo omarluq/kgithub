@@ -92,6 +92,10 @@ Item {
         return githubClient.isConfigured();
     }
 
+    function clearError() {
+        errorMessage = "";
+    }
+
     // Main data refresh function
     function refreshData(forceRefresh = false) {
         if (!isConfigured()) {

@@ -389,7 +389,7 @@ PlasmoidItem {
             // User profile card
             Components.UserProfileCard {
                 Layout.fillWidth: true
-                Layout.bottomMargin: root.inDetailContext ? -12 : 0
+                Layout.bottomMargin: root.inDetailContext ? 8 : 0
                 userData: dataManager.userData
                 repositoryCount: dataManager.totalRepos
                 totalStars: dataManager.totalStars
@@ -420,7 +420,7 @@ PlasmoidItem {
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.topMargin: root.inDetailContext ? -15 : 0
+                Layout.topMargin: root.inDetailContext ? 4 : 0
 
                 // Detail view for issues/PRs
                 Components.IssueDetailView {
@@ -659,12 +659,27 @@ PlasmoidItem {
             }
 
             // Error message
-            PlasmaComponents3.Label {
+            RowLayout {
                 Layout.fillWidth: true
-                text: dataManager.errorMessage
-                color: "red"
                 visible: dataManager.errorMessage !== ""
-                wrapMode: Text.WordWrap
+                spacing: 8
+
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    text: dataManager.errorMessage
+                    color: "red"
+                    wrapMode: Text.WordWrap
+                }
+
+                PlasmaComponents3.Button {
+                    icon.name: "window-close"
+                    flat: true
+                    implicitWidth: 24
+                    implicitHeight: 24
+                    onClicked: dataManager.clearError()
+                    PlasmaComponents3.ToolTip.text: "Dismiss error"
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
             }
         }
     }
