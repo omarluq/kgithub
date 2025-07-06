@@ -1,0 +1,17 @@
+{
+  "name": "kgithub-plasmoid",
+  "version": "1.0.0",
+  "description": "KDE Plasma widget for GitHub integration",
+  "scripts": {
+    "lint": "find . -name '*.qml' -exec qmllint {} \\;",
+    "lint:fix": "find . -name '*.qml' -exec sed -i 's/[[:space:]]\\+$//' {} \\;",
+    "clean": "find . -name '*.qml' -o -name '*.js' -o -name '*.json' | xargs sed -i 's/[[:space:]]\\+$//'",
+    "pre-commit": "pre-commit run --all-files",
+    "install-hooks": "pre-commit install"
+  },
+  "devDependencies": {
+    "pre-commit": "^1.2.2"
+  },
+  "keywords": ["kde", "plasma", "github", "widget", "plasmoid"],
+  "license": "MIT"
+}

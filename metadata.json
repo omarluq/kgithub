@@ -1,0 +1,21 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Email": "omar.luqman@hey.com",
+        "Name": "Omar Luq"
+      }
+    ],
+    "Category": "System Information",
+    "X-Plasma-NotificationArea": true,
+    "X-Plasma-NotificationAreaCategory": "SystemServices",
+    "Description": "A GitHub plasmoid for monitoring repositories, issues, and pull requests",
+    "Icon": "applications-development",
+    "Id": "com.github.omarluq.kgithub",
+    "Name": "KGithub",
+    "Version": "1.0.0",
+    "Website": "https://github.com/omarluq/kgithub"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

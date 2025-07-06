@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="githubToken" type="String">
+      <label>GitHub Personal Access Token</label>
+      <default></default>
+    </entry>
+    <entry name="githubUsername" type="String">
+      <label>GitHub Username</label>
+      <default></default>
+    </entry>
+    <entry name="refreshInterval" type="Int">
+      <label>Refresh interval in minutes</label>
+      <default>5</default>
+    </entry>
+    <entry name="showRepositoriesTab" type="Bool">
+      <label>Show Repositories tab</label>
+      <default>true</default>
+    </entry>
+    <entry name="showIssuesTab" type="Bool">
+      <label>Show Issues tab</label>
+      <default>true</default>
+    </entry>
+    <entry name="showPullRequestsTab" type="Bool">
+      <label>Show Pull Requests tab</label>
+      <default>true</default>
+    </entry>
+    <entry name="showOrganizationsTab" type="Bool">
+      <label>Show Organizations tab</label>
+      <default>true</default>
+    </entry>
+    <entry name="showStarredTab" type="Bool">
+      <label>Show Starred Repositories tab</label>
+      <default>true</default>
+    </entry>
+  </group>
+
+</kcfg>

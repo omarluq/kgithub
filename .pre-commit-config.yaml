@@ -1,0 +1,27 @@
+repos:
+  # Built-in hooks for general file cleanup
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        description: Remove trailing whitespace
+      - id: end-of-file-fixer
+        description: Ensure files end with newline
+      - id: mixed-line-ending
+        description: Normalize line endings
+      - id: check-merge-conflict
+        description: Check for merge conflict markers
+      - id: check-yaml
+        description: Validate YAML files
+      - id: check-json
+        description: Validate JSON files
+
+  # Custom QML linting hook
+  - repo: local
+    hooks:
+      - id: qmllint
+        name: QML Lint
+        entry: qmllint
+        language: system
+        files: '\.qml$'
+        description: Run qmllint on QML files
