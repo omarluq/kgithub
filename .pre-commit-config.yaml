@@ -16,12 +16,21 @@ repos:
       - id: check-json
         description: Validate JSON files
 
-  # Custom QML linting hook
+  # Custom QML linting and formatting hooks
   - repo: local
     hooks:
-      - id: qmllint
-        name: QML Lint
-        entry: qmllint
+      - id: qml-format
+        name: QML Format
+        entry: make format
         language: system
         files: '\.qml$'
-        description: Run qmllint on QML files
+        description: Format QML files using qmlformat
+        pass_filenames: false
+
+      - id: qml-lint
+        name: QML Lint
+        entry: make lint
+        language: system
+        files: '\.qml$'
+        description: Lint QML files using qmllint
+        pass_filenames: false

@@ -1,0 +1,5 @@
+module components
+DataManager 1.0 DataManager.qml
+UserProfileCard 1.0 UserProfileCard.qml
+PaginationControls 1.0 PaginationControls.qml
+UnifiedListItem 1.0 UnifiedListItem.qml

@@ -35,10 +35,20 @@ A KDE Plasma widget for GitHub integration that displays repositories, issues, p
 git clone https://github.com/omarluq/kgithub.git
 cd kgithub
 
-# Install the plasmoid
-kpackagetool6 --type Plasma/Applet --install .
+# Install the plasmoid (recommended)
+make install
 
-# Or update if already installed
+# Or install manually
+kpackagetool6 --type Plasma/Applet --install .
+```
+
+### Update Existing Installation
+
+```bash
+# Update to latest version
+make update
+
+# Or update manually
 kpackagetool6 --type Plasma/Applet --upgrade .
 ```
 
@@ -122,12 +132,23 @@ make setup
 ```bash
 # Code quality
 make lint           # Run qmllint on all QML files
+make format         # Format QML files with qmlformat
 make clean          # Remove trailing whitespace and extra spaces
 make pre-commit     # Run all pre-commit checks
 
 # Development
 make test           # Test plasmoid with plasmoidviewer
+make run            # Run plasmoid with plasmoidviewer (alias for test)
 make help           # Show all available commands
+
+# Installation
+make install        # Install plasmoid to KDE Plasma 6
+make update         # Update existing plasmoid installation
+make uninstall      # Remove plasmoid from KDE Plasma 6
+make restart-plasma # Restart Plasma Shell (useful after install/update)
+
+# Packaging
+make package VERSION=1.0.0-alpha  # Create plasmoid package with version
 ```
 
 ### Testing
