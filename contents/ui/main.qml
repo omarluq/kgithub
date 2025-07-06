@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.kde.plasma.plasmoid 2.0
-import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.components 3.0 as PlasmaComponents3
 import org.kde.kirigami 2.20 as Kirigami
 import "components" as Components
@@ -10,6 +9,7 @@ import "components" as Components
 PlasmoidItem {
     id: root
 
+    // Configuration properties
     readonly property string githubToken: plasmoid.configuration.githubToken || ""
     readonly property string githubUsername: plasmoid.configuration.githubUsername || ""
     readonly property int refreshInterval: (plasmoid.configuration.refreshInterval || 5) * 60000
@@ -18,57 +18,209 @@ PlasmoidItem {
     readonly property bool showPullRequestsTab: plasmoid.configuration.showPullRequestsTab !== undefined ? plasmoid.configuration.showPullRequestsTab : true
     readonly property bool showOrganizationsTab: plasmoid.configuration.showOrganizationsTab !== undefined ? plasmoid.configuration.showOrganizationsTab : true
     readonly property bool showStarredTab: plasmoid.configuration.showStarredTab !== undefined ? plasmoid.configuration.showStarredTab : true
+    readonly property int itemsPerPage: plasmoid.configuration.itemsPerPage || 5
 
-    property var userData: null
-    property var repositoriesData: []
-    property var issuesData: []
-    property var pullRequestsData: []
-    property var organizationsData: []
-    property var starredRepositoriesData: []
-    property bool isLoading: false
-    property string errorMessage: ""
-    property int totalStars: 0
-    property bool totalStarsCached: false
-
-    // Cache metadata with timestamps
-    property var userDataCache: ({ data: null, timestamp: 0, ttl: 30 * 60 * 1000 }) // 30 minutes
-    property var totalStarsCache: ({ count: 0, timestamp: 0, ttl: 2 * 60 * 60 * 1000 }) // 2 hours
-    property var organizationsCache: ({ data: [], timestamp: 0, ttl: 2 * 60 * 60 * 1000 }) // 2 hours
-    property bool calculatingStars: false
+    // Navigation context modes
+    property bool inRepositoryContext: false
+    property bool inDetailContext: false
+    property var currentRepository: null
+    property var currentItem: null  // Current issue or PR being viewed
+    property string previousTabId: ""
 
     // Dynamic tab management
     property var visibleTabs: buildVisibleTabsList()
 
     function buildVisibleTabsList() {
         var tabs = [];
-        if (root.showRepositoriesTab) tabs.push({id: "repos", name: "Repos", data: root.repositoriesData});
-        if (root.showIssuesTab) tabs.push({id: "issues", name: "Issues", data: root.issuesData});
-        if (root.showPullRequestsTab) tabs.push({id: "prs", name: "PRs", data: root.pullRequestsData});
-        if (root.showOrganizationsTab) tabs.push({id: "orgs", name: "Orgs", data: root.organizationsData});
-        if (root.showStarredTab) tabs.push({id: "starred", name: "Starred", data: root.starredRepositoriesData});
+
+        if (root.inDetailContext) {
+            // In detail context, no tabs needed - single view
+            return tabs;
+        } else if (root.inRepositoryContext) {
+            // In repository context, only show Issues and PRs tabs
+            tabs.push({
+                id: "repo-issues",
+                name: "Issues",
+                data: dataManager.repositoryIssuesData
+            });
+            tabs.push({
+                id: "repo-prs",
+                name: "PRs",
+                data: dataManager.repositoryPRsData
+            });
+        } else {
+            // Global context - show all enabled tabs
+            if (root.showRepositoriesTab)
+                tabs.push({
+                    id: "repos",
+                    name: "Repos",
+                    data: dataManager.repositoriesData
+                });
+            if (root.showIssuesTab)
+                tabs.push({
+                    id: "issues",
+                    name: "Issues",
+                    data: dataManager.issuesData
+                });
+            if (root.showPullRequestsTab)
+                tabs.push({
+                    id: "prs",
+                    name: "PRs",
+                    data: dataManager.pullRequestsData
+                });
+            if (root.showOrganizationsTab)
+                tabs.push({
+                    id: "orgs",
+                    name: "Orgs",
+                    data: dataManager.organizationsData
+                });
+            if (root.showStarredTab)
+                tabs.push({
+                    id: "starred",
+                    name: "Starred",
+                    data: dataManager.starredRepositoriesData
+                });
+        }
+
         return tabs;
     }
 
-    // Separate pagination properties for each tab
-    property int currentRepoPage: 1
-    property int currentIssuePage: 1
-    property int currentPRPage: 1
-    property int currentOrgPage: 1
-    property int currentStarredPage: 1
-    property int itemsPerPage: 5
-    property bool hasMoreRepos: true
-    property bool hasMoreIssues: true
-    property bool hasMorePRs: true
-    property bool hasMoreOrgs: true
-    property bool hasMoreStarred: true
-    property int totalRepos: 0
-    property int totalIssues: 0
-    property int totalPRs: 0
-    property int totalOrgs: 0
-    property int totalStarredRepos: 0
+    // Store current tab index to preserve across data updates
+    property int currentTabIndex: 0
 
+    // Width calculation trigger
+    property int widthTrigger: 0
+
+    function triggerWidthRecalculation() {
+        widthTrigger++;
+    }
+
+    function enterRepositoryContext(repository) {
+        // Save current tab ID to return to later
+        if (root.currentTabIndex < root.visibleTabs.length) {
+            root.previousTabId = root.visibleTabs[root.currentTabIndex].id;
+        }
+
+        root.currentRepository = repository;
+        root.inRepositoryContext = true;
+        root.currentTabIndex = 0; // Reset to first tab in repo context
+
+        // Update tab structure
+        root.visibleTabs = buildVisibleTabsList();
+
+        // Fetch repository-specific data
+        dataManager.fetchRepositoryIssues(repository.full_name, 1);
+        dataManager.fetchRepositoryPRs(repository.full_name, 1);
+
+        root.triggerWidthRecalculation();
+    }
+
+    function exitRepositoryContext() {
+        root.inRepositoryContext = false;
+        root.currentRepository = null;
+
+        // Restore global tab structure first
+        var newVisibleTabs = buildVisibleTabsList();
+
+        // Find the correct tab index before updating visibleTabs
+        var targetIndex = 0; // Default fallback
+        for (var i = 0; i < newVisibleTabs.length; i++) {
+            if (newVisibleTabs[i].id === root.previousTabId) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        // Update tabs and index together
+        root.visibleTabs = newVisibleTabs;
+        root.currentTabIndex = targetIndex;
+        // Force TabBar to sync its currentIndex
+        if (tabBar && tabBar.currentIndex !== targetIndex) {
+            tabBar.currentIndex = targetIndex;
+        }
+
+        root.triggerWidthRecalculation();
+    }
+
+    function enterDetailContext(item) {
+        // Save current tab ID to return to later
+        if (root.currentTabIndex < root.visibleTabs.length) {
+            root.previousTabId = root.visibleTabs[root.currentTabIndex].id;
+        }
+
+        root.currentItem = item;
+        root.inDetailContext = true;
+        root.visibleTabs = buildVisibleTabsList();
+
+        // Fetch detailed data for the item
+        if (root.currentRepository && item) {
+            if (item.pull_request) {
+                // It's a PR
+                dataManager.fetchPullRequestDetails(root.currentRepository.full_name, item.number);
+            } else {
+                // It's an issue
+                dataManager.fetchIssueDetails(root.currentRepository.full_name, item.number);
+            }
+        }
+
+        root.triggerWidthRecalculation();
+    }
+
+    function exitDetailContext() {
+        root.inDetailContext = false;
+        root.currentItem = null;
+
+        // If we came from global context (not repository context), clear currentRepository
+        if (!root.inRepositoryContext) {
+            root.currentRepository = null;
+        }
+
+        // Restore tab structure first
+        var newVisibleTabs = buildVisibleTabsList();
+
+        // Find the correct tab index before updating visibleTabs
+        var targetIndex = 0; // Default fallback
+        for (var i = 0; i < newVisibleTabs.length; i++) {
+            if (newVisibleTabs[i].id === root.previousTabId) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        // Update tabs and index together
+        root.visibleTabs = newVisibleTabs;
+        root.currentTabIndex = targetIndex;
+        // Force TabBar to sync its currentIndex
+        if (tabBar && tabBar.currentIndex !== targetIndex) {
+            tabBar.currentIndex = targetIndex;
+        }
+
+        root.triggerWidthRecalculation();
+    }
+
+    // Data Manager - centralized data handling
+    Components.DataManager {
+        id: dataManager
+        githubToken: root.githubToken
+        githubUsername: root.githubUsername
+        itemsPerPage: root.itemsPerPage
+
+        onDataUpdated: {
+            // Trigger UI updates when data changes
+            root.triggerWidthRecalculation();
+        }
+
+        onErrorOccurred: function (message) {}
+
+        onWidthRecalculationNeeded: {
+            root.triggerWidthRecalculation();
+        }
+    }
+
+    // Preferred representation
     preferredRepresentation: compactRepresentation
 
+    // Compact representation (icon in panel/desktop)
     compactRepresentation: Item {
         id: compactRoot
 
@@ -82,17 +234,17 @@ PlasmoidItem {
             anchors.centerIn: parent
             width: Math.min(parent.width, parent.height) * 0.8
             height: width
-            source: root.isLoading ? "" : Qt.resolvedUrl("../assets/icons/icons8-github.svg")
+            source: dataManager.isLoading ? "" : Qt.resolvedUrl("../assets/icons/icons8-github.svg")
             fillMode: Image.PreserveAspectFit
             smooth: true
 
             Kirigami.Icon {
                 anchors.fill: parent
                 source: "view-refresh"
-                visible: root.isLoading
+                visible: dataManager.isLoading
 
                 RotationAnimation on rotation {
-                    running: root.isLoading
+                    running: dataManager.isLoading
                     loops: Animation.Infinite
                     from: 0
                     to: 360
@@ -100,59 +252,78 @@ PlasmoidItem {
                 }
             }
         }
-
     }
 
+    // Full representation (expanded widget)
     fullRepresentation: Item {
         id: fullRepresentation
 
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 20
+        Layout.minimumWidth: optimalWidth
         Layout.minimumHeight: optimalHeight
-        Layout.preferredWidth: Kirigami.Units.gridUnit * 25
+        Layout.preferredWidth: optimalWidth
         Layout.preferredHeight: optimalHeight
+        Layout.maximumWidth: optimalWidth
 
-        property int optimalHeight: {
-            var currentItems = 0;
-            if (tabBar && tabBar.currentIndex !== undefined) {
-                // Map visible tab index to actual data
-                var visibleTabIndex = 0;
-                var actualTabIndex = 0;
+        property int optimalWidth: {
+            // Make calculation reactive to data changes
+            root.widthTrigger;
 
-                if (root.showRepositoriesTab && actualTabIndex++ == tabBar.currentIndex) {
-                    currentItems = Math.min(root.repositoriesData.length, root.itemsPerPage);
-                } else if (root.showIssuesTab && actualTabIndex++ == tabBar.currentIndex) {
-                    currentItems = Math.min(root.issuesData.length, root.itemsPerPage);
-                } else if (root.showPullRequestsTab && actualTabIndex++ == tabBar.currentIndex) {
-                    currentItems = Math.min(root.pullRequestsData.length, root.itemsPerPage);
-                } else if (root.showOrganizationsTab && actualTabIndex++ == tabBar.currentIndex) {
-                    currentItems = Math.min(root.organizationsData.length, root.itemsPerPage);
-                } else if (root.showStarredTab && actualTabIndex++ == tabBar.currentIndex) {
-                    currentItems = Math.min(root.starredRepositoriesData.length, root.itemsPerPage);
-                } else {
-                    currentItems = root.itemsPerPage;
+            // Base width calculation
+            var baseWidth = Kirigami.Units.gridUnit * 28;
+            var calculatedWidth = baseWidth;
+
+            // User profile width
+            if (dataManager.userData) {
+                var profileWidth = 0;
+                if (dataManager.userData.name) {
+                    profileWidth = Math.max(profileWidth, dataManager.userData.name.length * 10);
                 }
-            } else {
-                currentItems = root.itemsPerPage;
+                if (dataManager.userData.login) {
+                    profileWidth = Math.max(profileWidth, dataManager.userData.login.length * 10);
+                }
+                profileWidth += 200; // Avatar + stats + margins
+                calculatedWidth = Math.max(calculatedWidth, profileWidth);
             }
 
-            var headerHeight = 40;          // Title + refresh button
-            var profileCardHeight = 84;     // User profile card
-            var tabBarHeight = 32;          // Tab bar
-            var itemHeight = 60;            // Per list item
-            var itemSpacing = 2;            // Between items
-            var paginationHeight = 32;      // Pagination controls
-            var margins = 20;               // Various margins/spacing
+            // Tab bar width
+            var tabBarWidth = root.visibleTabs.length * 80 + 40;
+            calculatedWidth = Math.max(calculatedWidth, tabBarWidth);
 
-            var contentHeight = (currentItems * itemHeight) + ((currentItems - 1) * itemSpacing) + paginationHeight;
-            var totalHeight = headerHeight + profileCardHeight + tabBarHeight + contentHeight + margins;
+            // Content-based width
+            calculatedWidth = Math.max(calculatedWidth, Kirigami.Units.gridUnit * 30);
 
-            return Math.max(totalHeight, Kirigami.Units.gridUnit * 15); // Minimum fallback
+            // Apply constraints
+            var finalWidth = Math.max(baseWidth, calculatedWidth);
+            return Math.min(finalWidth, Kirigami.Units.gridUnit * 50);
+        }
+
+        property int optimalHeight: {
+            // Dynamic height calculation
+            var headerHeight = 40;
+            var profileCardHeight = 84;
+            var tabBarHeight = 32;
+            var margins = 20;
+
+            if (root.inDetailContext) {
+                // Detail view: calculate based on number of timeline items
+                var timelineItems = Math.min(3, dataManager.currentItemComments.length + 1); // +1 for description
+                var timelineHeight = timelineItems * 124 + (timelineItems - 1) * 4; // 120px per card + 4px spacing
+                var issueHeaderHeight = 80; // Title + author + labels
+                var totalHeight = headerHeight + profileCardHeight + issueHeaderHeight + timelineHeight + margins;
+                return Math.max(totalHeight, Kirigami.Units.gridUnit * 20);
+            } else {
+                // Normal tab view
+                var contentHeight = root.itemsPerPage * 60 + (root.itemsPerPage - 1) * 2;
+                var paginationHeight = 32;
+                var totalHeight = headerHeight + profileCardHeight + tabBarHeight + contentHeight + paginationHeight + margins;
+                return Math.max(totalHeight, Kirigami.Units.gridUnit * 15);
+            }
         }
 
         Component.onCompleted: {
-            if ((root.githubToken !== "" || getEffectiveToken() !== "") && root.githubUsername !== "") {
-                if (!root.userData) {
-                    root.refreshData();
+            if (root.githubToken !== "" && root.githubUsername !== "") {
+                if (!dataManager.userData) {
+                    dataManager.refreshData();
                 }
             }
         }
@@ -166,252 +337,322 @@ PlasmoidItem {
             RowLayout {
                 Layout.fillWidth: true
 
+                // Back button (visible in repository or detail context)
+                PlasmaComponents3.Button {
+                    icon.name: "go-previous"
+                    visible: root.inRepositoryContext || root.inDetailContext
+                    onClicked: {
+                        if (root.inDetailContext) {
+                            root.exitDetailContext();
+                        } else {
+                            root.exitRepositoryContext();
+                        }
+                    }
+                    PlasmaComponents3.ToolTip.text: {
+                        if (root.inDetailContext) {
+                            return root.inRepositoryContext ? "Back to repository view" : "Back to global view";
+                        } else {
+                            return "Back to global view";
+                        }
+                    }
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
+
                 Kirigami.Heading {
-                    text: "KGithub"
+                    text: {
+                        if (root.inDetailContext && root.currentRepository && root.currentItem) {
+                            return root.currentRepository.full_name + " #" + root.currentItem.number;
+                        } else if (root.inRepositoryContext && root.currentRepository) {
+                            return root.currentRepository.full_name;
+                        } else {
+                            return "KGithub";
+                        }
+                    }
                     level: 3
                     Layout.fillWidth: true
                 }
 
                 PlasmaComponents3.Button {
                     icon.name: "view-refresh"
-                    onClicked: root.refreshData(true) // Force refresh all data including cached items
-                    enabled: !root.isLoading
+                    onClicked: {
+                        if (root.inRepositoryContext && root.currentRepository) {
+                            dataManager.fetchRepositoryIssues(root.currentRepository.full_name, 1);
+                            dataManager.fetchRepositoryPRs(root.currentRepository.full_name, 1);
+                        } else {
+                            dataManager.refreshData(true);
+                        }
+                    }
+                    enabled: !dataManager.isLoading
                 }
             }
 
             // User profile card
             Components.UserProfileCard {
                 Layout.fillWidth: true
-                userData: root.userData
-                repositoryCount: root.totalRepos
-                totalStars: root.totalStars
+                Layout.bottomMargin: root.inDetailContext ? -12 : 0
+                userData: dataManager.userData
+                repositoryCount: dataManager.totalRepos
+                totalStars: dataManager.totalStars
             }
 
             // Tab bar
             PlasmaComponents3.TabBar {
                 id: tabBar
                 Layout.fillWidth: true
+                Layout.topMargin: root.inDetailContext ? -12 : 0
+                Layout.bottomMargin: root.inDetailContext ? -12 : 0
+                currentIndex: root.currentTabIndex
+
+                onCurrentIndexChanged: {
+                    root.currentTabIndex = currentIndex;
+                }
 
                 Repeater {
                     model: root.visibleTabs
-                    PlasmaComponents3.TabButton {
-                        text: getTabDisplayText(modelData.id)
+                    delegate: PlasmaComponents3.TabButton {
+                        text: modelData.name
+                        width: implicitWidth
                     }
                 }
             }
 
             // Content area
-            StackLayout {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: tabBar.currentIndex
+                Layout.topMargin: root.inDetailContext ? -15 : 0
 
-                // Repositories tab
-                ColumnLayout {
-                    visible: root.showRepositoriesTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: root.repositoriesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: reposList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(root.repositoriesData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: root.repositoriesData[index]
-                                itemType: "repo"
-                                itemIndex: index
-                                width: reposList.width
-                                onClicked: function (item) {
-                                }
-                            }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: root.currentRepoPage
-                        hasMore: root.hasMoreRepos
-                        totalItems: root.totalRepos > 0 ? root.totalRepos : root.repositoriesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            root.currentRepoPage = page;
-                            root.fetchRepositories(page);
-                        }
-                    }
+                // Detail view for issues/PRs
+                Components.IssueDetailView {
+                    anchors.fill: parent
+                    anchors.margins: 0
+                    visible: root.inDetailContext
+                    itemData: root.currentItem
+                    detailData: root.currentItem && root.currentItem.pull_request ? dataManager.currentPRDetail : dataManager.currentIssueDetail
+                    commentsData: dataManager.currentItemComments
+                    isLoading: dataManager.isLoading
                 }
 
-                // Issues tab
-                ColumnLayout {
-                    visible: root.showIssuesTab
-                    spacing: Kirigami.Units.smallSpacing
+                // Tab-based view
+                StackLayout {
+                    anchors.fill: parent
+                    visible: !root.inDetailContext
+                    currentIndex: root.currentTabIndex
 
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
+                    Repeater {
+                        model: root.visibleTabs
 
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: root.issuesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
+                        ColumnLayout {
+                            spacing: Kirigami.Units.smallSpacing
+                            property string tabId: modelData.id
 
-                        ListView {
-                            id: issuesList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(root.issuesData.length, root.itemsPerPage)
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
 
-                            delegate: Components.UnifiedListItem {
-                                itemData: root.issuesData[index]
-                                itemType: "issue"
-                                itemIndex: index
-                                width: issuesList.width
-                                onClicked: function (item) {
+                                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                                ScrollBar.vertical.policy: {
+                                    var dataLength = 0;
+                                    switch (tabId) {
+                                    case "repos":
+                                        dataLength = dataManager.repositoriesData.length;
+                                        break;
+                                    case "issues":
+                                        dataLength = dataManager.issuesData.length;
+                                        break;
+                                    case "prs":
+                                        dataLength = dataManager.pullRequestsData.length;
+                                        break;
+                                    case "orgs":
+                                        dataLength = dataManager.organizationsData.length;
+                                        break;
+                                    case "starred":
+                                        dataLength = dataManager.starredRepositoriesData.length;
+                                        break;
+                                    case "repo-issues":
+                                        dataLength = dataManager.repositoryIssuesData.length;
+                                        break;
+                                    case "repo-prs":
+                                        dataLength = dataManager.repositoryPRsData.length;
+                                        break;
+                                    }
+                                    return dataLength === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded;
+                                }
+
+                                ListView {
+                                    boundsBehavior: Flickable.StopAtBounds
+                                    spacing: 2
+                                    model: {
+                                        switch (tabId) {
+                                        case "repos":
+                                            return dataManager.repositoriesData;
+                                        case "issues":
+                                            return dataManager.issuesData;
+                                        case "prs":
+                                            return dataManager.pullRequestsData;
+                                        case "orgs":
+                                            return dataManager.organizationsData;
+                                        case "starred":
+                                            return dataManager.starredRepositoriesData;
+                                        case "repo-issues":
+                                            return dataManager.repositoryIssuesData;
+                                        case "repo-prs":
+                                            return dataManager.repositoryPRsData;
+                                        default:
+                                            return [];
+                                        }
+                                    }
+
+                                    delegate: Components.UnifiedListItem {
+                                        itemData: modelData
+                                        itemType: {
+                                            switch (tabId) {
+                                            case "repos":
+                                                return "repo";
+                                            case "issues":
+                                            case "repo-issues":
+                                                return "issue";
+                                            case "prs":
+                                            case "repo-prs":
+                                                return "pr";
+                                            case "orgs":
+                                                return "org";
+                                            case "starred":
+                                                return "repo";
+                                            default:
+                                                return "repo";
+                                            }
+                                        }
+                                        itemIndex: index
+                                        width: parent.width
+                                        onClicked: function (item) {
+                                            if (tabId === "repos" || tabId === "starred") {
+                                                // Repository clicked - enter repository context
+                                                root.enterRepositoryContext(item);
+                                            } else if (tabId === "issues" || tabId === "repo-issues" || tabId === "prs" || tabId === "repo-prs") {
+                                                // Issue or PR clicked - enter detail context
+                                                // For global issues/PRs, extract repository info from the item
+                                                if (tabId === "issues" || tabId === "prs") {
+                                                    // Extract repository info from global issue/PR
+                                                    if (item.repository_url) {
+                                                        var repoPath = item.repository_url.split('/').slice(-2);
+                                                        root.currentRepository = {
+                                                            full_name: repoPath.join('/'),
+                                                            name: repoPath[1],
+                                                            owner: {
+                                                                login: repoPath[0]
+                                                            }
+                                                        };
+                                                    }
+                                                }
+                                                root.enterDetailContext(item);
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
 
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: root.currentIssuePage
-                        hasMore: root.hasMoreIssues
-                        totalItems: root.totalIssues > 0 ? root.totalIssues : root.issuesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            root.currentIssuePage = page;
-                            root.fetchIssues(page);
-                        }
-                    }
-                }
-
-                // Pull Requests tab
-                ColumnLayout {
-                    visible: root.showPullRequestsTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: root.pullRequestsData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: prsList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(root.pullRequestsData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: root.pullRequestsData[index]
-                                itemType: "pr"
-                                itemIndex: index
-                                width: prsList.width
-                                onClicked: function (item) {
+                            Components.PaginationControls {
+                                Layout.fillWidth: true
+                                currentPage: {
+                                    switch (tabId) {
+                                    case "repos":
+                                        return dataManager.getCurrentPageForTab("repos");
+                                    case "issues":
+                                        return dataManager.getCurrentPageForTab("issues");
+                                    case "prs":
+                                        return dataManager.getCurrentPageForTab("prs");
+                                    case "orgs":
+                                        return dataManager.getCurrentPageForTab("orgs");
+                                    case "starred":
+                                        return dataManager.getCurrentPageForTab("starred");
+                                    case "repo-issues":
+                                        return dataManager.currentRepoIssuesPage;
+                                    case "repo-prs":
+                                        return dataManager.currentRepoPRsPage;
+                                    default:
+                                        return 1;
+                                    }
+                                }
+                                hasMore: {
+                                    switch (tabId) {
+                                    case "repos":
+                                        return dataManager.getHasMoreForTab("repos");
+                                    case "issues":
+                                        return dataManager.getHasMoreForTab("issues");
+                                    case "prs":
+                                        return dataManager.getHasMoreForTab("prs");
+                                    case "orgs":
+                                        return dataManager.getHasMoreForTab("orgs");
+                                    case "starred":
+                                        return dataManager.getHasMoreForTab("starred");
+                                    case "repo-issues":
+                                        return dataManager.hasMoreRepoIssues;
+                                    case "repo-prs":
+                                        return dataManager.hasMoreRepoPRs;
+                                    default:
+                                        return false;
+                                    }
+                                }
+                                totalItems: {
+                                    switch (tabId) {
+                                    case "repos":
+                                        return dataManager.getTotalItemsForTab("repos");
+                                    case "issues":
+                                        return dataManager.getTotalItemsForTab("issues");
+                                    case "prs":
+                                        return dataManager.getTotalItemsForTab("prs");
+                                    case "orgs":
+                                        return dataManager.getTotalItemsForTab("orgs");
+                                    case "starred":
+                                        return dataManager.getTotalItemsForTab("starred");
+                                    case "repo-issues":
+                                        return dataManager.totalRepoIssues;
+                                    case "repo-prs":
+                                        return dataManager.totalRepoPRs;
+                                    default:
+                                        return 0;
+                                    }
+                                }
+                                currentPageItems: {
+                                    switch (tabId) {
+                                    case "repos":
+                                        return dataManager.repositoriesData.length;
+                                    case "issues":
+                                        return dataManager.issuesData.length;
+                                    case "prs":
+                                        return dataManager.pullRequestsData.length;
+                                    case "orgs":
+                                        return dataManager.organizationsData.length;
+                                    case "starred":
+                                        return dataManager.starredRepositoriesData.length;
+                                    case "repo-issues":
+                                        return dataManager.repositoryIssuesData.length;
+                                    case "repo-prs":
+                                        return dataManager.repositoryPRsData.length;
+                                    default:
+                                        return 0;
+                                    }
+                                }
+                                itemsPerPage: root.itemsPerPage
+                                onGoToPage: function (page) {
+                                    switch (tabId) {
+                                    case "repos":
+                                    case "issues":
+                                    case "prs":
+                                    case "orgs":
+                                    case "starred":
+                                        dataManager.fetchDataForTab(tabId, page);
+                                        break;
+                                    case "repo-issues":
+                                        dataManager.fetchRepositoryIssues(root.currentRepository.full_name, page);
+                                        break;
+                                    case "repo-prs":
+                                        dataManager.fetchRepositoryPRs(root.currentRepository.full_name, page);
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: root.currentPRPage
-                        hasMore: root.hasMorePRs
-                        totalItems: root.totalPRs > 0 ? root.totalPRs : root.pullRequestsData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            root.currentPRPage = page;
-                            root.fetchPullRequests(page);
-                        }
-                    }
-                }
-
-                // Organizations tab
-                ColumnLayout {
-                    visible: root.showOrganizationsTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: root.organizationsData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: orgsList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(root.organizationsData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: root.organizationsData[index]
-                                itemType: "org"
-                                itemIndex: index
-                                width: orgsList.width
-                                onClicked: function (item) {
-                                }
-                            }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: root.currentOrgPage
-                        hasMore: root.hasMoreOrgs
-                        totalItems: root.totalOrgs > 0 ? root.totalOrgs : root.organizationsData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            root.currentOrgPage = page;
-                            root.fetchOrganizations(page);
-                        }
-                    }
-                }
-
-                // Starred Repositories tab
-                ColumnLayout {
-                    visible: root.showStarredTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: root.starredRepositoriesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: starredList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(root.starredRepositoriesData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: root.starredRepositoriesData[index]
-                                itemType: "repo"
-                                itemIndex: index
-                                width: starredList.width
-                                onClicked: function (item) {
-                                }
-                            }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: root.currentStarredPage
-                        hasMore: root.hasMoreStarred
-                        totalItems: root.totalStarredRepos > 0 ? root.totalStarredRepos : root.starredRepositoriesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            root.currentStarredPage = page;
-                            root.fetchStarredRepositories(page);
                         }
                     }
                 }
@@ -420,585 +661,36 @@ PlasmoidItem {
             // Error message
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
-                text: root.errorMessage
+                text: dataManager.errorMessage
                 color: "red"
-                visible: root.errorMessage !== ""
+                visible: dataManager.errorMessage !== ""
                 wrapMode: Text.WordWrap
             }
         }
     }
 
+    // Auto-refresh timer
     Timer {
         id: refreshTimer
         interval: root.refreshInterval
-        running: (root.githubToken !== "" || getEffectiveToken() !== "") && root.githubUsername !== ""
+        running: root.githubToken !== "" && root.githubUsername !== ""
         repeat: true
-        onTriggered: root.refreshData()
+        onTriggered: dataManager.refreshData()
     }
 
-    function getEffectiveToken() {
-        return root.githubToken;
-    }
-
-    function isCacheValid(cache) {
-        return cache.timestamp > 0 && (Date.now() - cache.timestamp) < cache.ttl;
-    }
-
-    function updateCache(cache, data) {
-        cache.data = data;
-        cache.timestamp = Date.now();
-        return cache;
-    }
-
-    function buildVisibleTabs() {
-        var tabs = [];
-        var mapping = {};
-        var visibleIndex = 0;
-
-        if (root.showRepositoriesTab) {
-            tabs.push("repositories");
-            mapping["repositories"] = visibleIndex++;
-        }
-        if (root.showIssuesTab) {
-            tabs.push("issues");
-            mapping["issues"] = visibleIndex++;
-        }
-        if (root.showPullRequestsTab) {
-            tabs.push("pullRequests");
-            mapping["pullRequests"] = visibleIndex++;
-        }
-        if (root.showOrganizationsTab) {
-            tabs.push("organizations");
-            mapping["organizations"] = visibleIndex++;
-        }
-        if (root.showStarredTab) {
-            tabs.push("starred");
-            mapping["starred"] = visibleIndex++;
-        }
-
-        root.visibleTabs = tabs;
-        root.tabIndexMapping = mapping;
-    }
-
-    function getDataForVisibleTab(visibleIndex) {
-        if (visibleIndex >= 0 && visibleIndex < root.visibleTabs.length) {
-            var tabType = root.visibleTabs[visibleIndex];
-            switch(tabType) {
-                case "repositories": return root.repositoriesData;
-                case "issues": return root.issuesData;
-                case "pullRequests": return root.pullRequestsData;
-                case "organizations": return root.organizationsData;
-                case "starred": return root.starredRepositoriesData;
-                default: return [];
-            }
-        }
-        return [];
-    }
-
-    function getTabDisplayText(tabId) {
-        switch(tabId) {
-            case "repos": return "Repos (" + Math.min(root.repositoriesData.length, root.itemsPerPage) + ")";
-            case "issues": return "Issues (" + Math.min(root.issuesData.length, root.itemsPerPage) + ")";
-            case "prs": return "PRs (" + Math.min(root.pullRequestsData.length, root.itemsPerPage) + ")";
-            case "orgs": return "Orgs (" + Math.min(root.organizationsData.length, root.itemsPerPage) + ")";
-            case "starred": return "Starred (" + Math.min(root.starredRepositoriesData.length, root.itemsPerPage) + ")";
-            default: return "Tab";
+    // Initial width calculation timer
+    Timer {
+        id: initialWidthTimer
+        interval: 100
+        running: true
+        onTriggered: {
+            root.triggerWidthRecalculation();
         }
     }
 
-    function getItemType(tabType) {
-        switch(tabType) {
-            case "repositories": return "repo";
-            case "issues": return "issue";
-            case "pullRequests": return "pr";
-            case "organizations": return "org";
-            case "starred": return "repo";
-            default: return "repo";
-        }
-    }
-
-    function getCurrentPage(tabType) {
-        switch(tabType) {
-            case "repositories": return root.currentRepoPage;
-            case "issues": return root.currentIssuePage;
-            case "pullRequests": return root.currentPRPage;
-            case "organizations": return root.currentOrgPage;
-            case "starred": return root.currentStarredPage;
-            default: return 1;
-        }
-    }
-
-    function getHasMore(tabType) {
-        switch(tabType) {
-            case "repositories": return root.hasMoreRepos;
-            case "issues": return root.hasMoreIssues;
-            case "pullRequests": return root.hasMorePRs;
-            case "organizations": return root.hasMoreOrgs;
-            case "starred": return root.hasMoreStarred;
-            default: return false;
-        }
-    }
-
-    function getTotalItems(tabType) {
-        switch(tabType) {
-            case "repositories": return root.totalRepos > 0 ? root.totalRepos : root.repositoriesData.length;
-            case "issues": return root.totalIssues > 0 ? root.totalIssues : root.issuesData.length;
-            case "pullRequests": return root.totalPRs > 0 ? root.totalPRs : root.pullRequestsData.length;
-            case "organizations": return root.totalOrgs > 0 ? root.totalOrgs : root.organizationsData.length;
-            case "starred": return root.totalStarredRepos > 0 ? root.totalStarredRepos : root.starredRepositoriesData.length;
-            default: return 0;
-        }
-    }
-
-    function setCurrentPage(tabType, page) {
-        switch(tabType) {
-            case "repositories": root.currentRepoPage = page; break;
-            case "issues": root.currentIssuePage = page; break;
-            case "pullRequests": root.currentPRPage = page; break;
-            case "organizations": root.currentOrgPage = page; break;
-            case "starred": root.currentStarredPage = page; break;
-        }
-    }
-
-    function fetchDataForTab(tabType, page) {
-        switch(tabType) {
-            case "repositories": root.fetchRepositories(page); break;
-            case "issues": root.fetchIssues(page); break;
-            case "pullRequests": root.fetchPullRequests(page); break;
-            case "organizations": root.fetchOrganizations(page); break;
-            case "starred": root.fetchStarredRepositories(page); break;
-        }
-    }
-
-    // New helper functions for dynamic tab system
-    function getDataForTab(tabId) {
-        switch(tabId) {
-            case "repos": return root.repositoriesData;
-            case "issues": return root.issuesData;
-            case "prs": return root.pullRequestsData;
-            case "orgs": return root.organizationsData;
-            case "starred": return root.starredRepositoriesData;
-            default: return [];
-        }
-    }
-
-    function getItemTypeForTab(tabId) {
-        switch(tabId) {
-            case "repos": return "repo";
-            case "issues": return "issue";
-            case "prs": return "pr";
-            case "orgs": return "org";
-            case "starred": return "repo";
-            default: return "repo";
-        }
-    }
-
-    function getCurrentPageForTab(tabId) {
-        switch(tabId) {
-            case "repos": return root.currentRepoPage;
-            case "issues": return root.currentIssuePage;
-            case "prs": return root.currentPRPage;
-            case "orgs": return root.currentOrgPage;
-            case "starred": return root.currentStarredPage;
-            default: return 1;
-        }
-    }
-
-    function getHasMoreForTab(tabId) {
-        switch(tabId) {
-            case "repos": return root.hasMoreRepos;
-            case "issues": return root.hasMoreIssues;
-            case "prs": return root.hasMorePRs;
-            case "orgs": return root.hasMoreOrgs;
-            case "starred": return root.hasMoreStarred;
-            default: return false;
-        }
-    }
-
-    function getTotalItemsForTab(tabId) {
-        var result;
-        switch(tabId) {
-            case "repos": result = root.totalRepos > 0 ? root.totalRepos : root.repositoriesData.length; break;
-            case "issues": result = root.totalIssues > 0 ? root.totalIssues : root.issuesData.length; break;
-            case "prs": result = root.totalPRs > 0 ? root.totalPRs : root.pullRequestsData.length; break;
-            case "orgs": result = root.totalOrgs > 0 ? root.totalOrgs : root.organizationsData.length; break;
-            case "starred":
-                result = root.totalStarredRepos > 0 ? root.totalStarredRepos : root.starredRepositoriesData.length;
-                break;
-            default: result = 0; break;
-        }
-        return result;
-    }
-
-    function setCurrentPageForTab(tabId, page) {
-        switch(tabId) {
-            case "repos": root.currentRepoPage = page; break;
-            case "issues": root.currentIssuePage = page; break;
-            case "prs": root.currentPRPage = page; break;
-            case "orgs": root.currentOrgPage = page; break;
-            case "starred": root.currentStarredPage = page; break;
-        }
-    }
-
-    function fetchDataForTabById(tabId, page) {
-        switch(tabId) {
-            case "repos": root.fetchRepositories(page); break;
-            case "issues": root.fetchIssues(page); break;
-            case "prs": root.fetchPullRequests(page); break;
-            case "orgs": root.fetchOrganizations(page); break;
-            case "starred": root.fetchStarredRepositories(page); break;
-        }
-    }
-
-    function refreshData(forceRefresh = false) {
-        var effectiveToken = getEffectiveToken();
-
-        if (effectiveToken === "" || root.githubUsername === "") {
-            root.errorMessage = "Please configure GitHub token and username in settings";
-            return;
-        }
-
-        root.isLoading = true;
-        root.errorMessage = "";
-
-        // If force refresh, invalidate all caches
-        if (forceRefresh) {
-            root.userDataCache.timestamp = 0;
-            root.totalStarsCache.timestamp = 0;
-            root.organizationsCache.timestamp = 0;
-        }
-
-        // Check if user data is cached and valid (unless force refresh)
-        if (!forceRefresh && isCacheValid(root.userDataCache)) {
-            root.userData = root.userDataCache.data;
-            root.totalRepos = root.userData.public_repos || 0;
-            root.fetchRepositories(1);
-            return;
-        }
-
-        // Fetch user data
-        var userRequest = new XMLHttpRequest();
-        var userUrl = "https://api.github.com/users/" + root.githubUsername;
-        userRequest.open("GET", userUrl);
-        userRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        userRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        userRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        userRequest.onreadystatechange = function () {
-            if (userRequest.readyState === XMLHttpRequest.DONE) {
-                if (userRequest.status === 200) {
-                    root.userData = JSON.parse(userRequest.responseText);
-                    root.totalRepos = root.userData.public_repos || 0;
-
-                    // Cache the user data
-                    updateCache(root.userDataCache, root.userData);
-
-                    // Calculate total stars only on fresh user data fetch
-                    root.calculateTotalStars();
-                    root.fetchRepositories(1);
-                } else {
-                    if (userRequest.status === 401) {
-                        root.errorMessage = "Invalid GitHub token. Please check your token in settings.";
-                    } else {
-                        root.errorMessage = "Failed to fetch user data: " + userRequest.status + " - " + userRequest.responseText;
-                    }
-                    root.isLoading = false;
-                }
-            }
-        };
-
-        userRequest.send();
-    }
-
-    function fetchRepositories(page = 1) {
-        var effectiveToken = getEffectiveToken();
-        var reposRequest = new XMLHttpRequest();
-        var reposUrl = "https://api.github.com/users/" + root.githubUsername + "/repos?sort=updated&per_page=" + root.itemsPerPage + "&page=" + page + "&type=all";
-        reposRequest.open("GET", reposUrl);
-        reposRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        reposRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        reposRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        reposRequest.onreadystatechange = function () {
-            if (reposRequest.readyState === XMLHttpRequest.DONE) {
-                if (reposRequest.status === 200) {
-                    var repos = JSON.parse(reposRequest.responseText);
-
-                    root.repositoriesData = repos;
-                    root.hasMoreRepos = repos.length === root.itemsPerPage;
-                    root.currentRepoPage = page;
-
-                    // Only calculate total stars and fetch other data on page 1
-                    if (page === 1) {
-                        root.fetchIssues(1);
-                    }
-                } else {
-                    root.errorMessage = "Failed to fetch repositories: " + reposRequest.status + " - " + reposRequest.responseText;
-                }
-            }
-        };
-
-        reposRequest.send();
-    }
-
-    function calculateTotalStars() {
-        // Prevent concurrent calculations
-        if (root.calculatingStars) {
-            return;
-        }
-
-        // Check time-based cache first
-        if (isCacheValid(root.totalStarsCache)) {
-            root.totalStars = root.totalStarsCache.count;
-            return;
-        }
-
-        root.calculatingStars = true;
-        testBothStarredEndpoints();
-
-        root.totalStars = 0;
-        calculateTotalStarsRecursive(1);
-    }
-
-    function testBothStarredEndpoints() {
-        var effectiveToken = getEffectiveToken();
-
-        // Test authenticated endpoint
-        var authRequest = new XMLHttpRequest();
-        authRequest.open("GET", "https://api.github.com/user/starred?per_page=5");
-        authRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        authRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        authRequest.onreadystatechange = function() {
-            if (authRequest.readyState === XMLHttpRequest.DONE) {
-                if (authRequest.status === 200) {
-                    var authData = JSON.parse(authRequest.responseText);
-                }
-            }
-        };
-        authRequest.send();
-
-        // Test public endpoint
-        var publicRequest = new XMLHttpRequest();
-        publicRequest.open("GET", "https://api.github.com/users/" + root.githubUsername + "/starred?per_page=5");
-        publicRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        publicRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        publicRequest.onreadystatechange = function() {
-            if (publicRequest.readyState === XMLHttpRequest.DONE) {
-                if (publicRequest.status === 200) {
-                    var publicData = JSON.parse(publicRequest.responseText);
-                }
-            }
-        };
-        publicRequest.send();
-
-        // Test token scopes
-        var scopeRequest = new XMLHttpRequest();
-        scopeRequest.open("GET", "https://api.github.com/user");
-        scopeRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        scopeRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        scopeRequest.onreadystatechange = function() {
-            if (scopeRequest.readyState === XMLHttpRequest.DONE) {
-            }
-        };
-        scopeRequest.send();
-    }
-
-    function calculateTotalStarsRecursive(page) {
-        var effectiveToken = getEffectiveToken();
-        var starsRequest = new XMLHttpRequest();
-        var starsUrl = "https://api.github.com/users/" + root.githubUsername + "/starred?per_page=100&page=" + page;
-        starsRequest.open("GET", starsUrl);
-        starsRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        starsRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        starsRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        starsRequest.onreadystatechange = function () {
-            if (starsRequest.readyState === XMLHttpRequest.DONE) {
-                if (starsRequest.status === 200) {
-                    var starredRepos = JSON.parse(starsRequest.responseText);
-                    root.totalStars += starredRepos.length;
-
-                    // Check response headers for API rate limiting info
-                    var rateLimitRemaining = starsRequest.getResponseHeader('X-RateLimit-Remaining');
-                    var rateLimitReset = starsRequest.getResponseHeader('X-RateLimit-Reset');
-
-                    // If we got a full page (100 repos), there might be more pages
-                    if (starredRepos.length === 100) {
-                        calculateTotalStarsRecursive(page + 1);
-                    } else {
-                        // Cache the result for 2 hours
-                        root.totalStarsCache.count = root.totalStars;
-                        root.totalStarsCache.timestamp = Date.now();
-
-                        // Update the totalStarredRepos for pagination
-                        root.totalStarredRepos = root.totalStars;
-
-                        // Reset the calculation flag
-                        root.calculatingStars = false;
-                    }
-                } else {
-                    // Reset flag on error
-                    root.calculatingStars = false;
-                }
-            }
-        };
-
-        starsRequest.send();
-    }
-
-    function fetchIssues(page = 1) {
-        var effectiveToken = getEffectiveToken();
-        var issuesRequest = new XMLHttpRequest();
-        var issuesUrl = "https://api.github.com/search/issues?q=involves:" + root.githubUsername + "+state:open+-is:pr&per_page=" + root.itemsPerPage + "&page=" + page + "&sort=updated";
-        issuesRequest.open("GET", issuesUrl);
-        issuesRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        issuesRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        issuesRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        issuesRequest.onreadystatechange = function () {
-            if (issuesRequest.readyState === XMLHttpRequest.DONE) {
-                if (issuesRequest.status === 200) {
-                    var searchResults = JSON.parse(issuesRequest.responseText);
-                    var issues = searchResults.items || [];
-                    root.totalIssues = searchResults.total_count || 0;
-
-                    root.issuesData = issues;
-                    root.hasMoreIssues = issues.length === root.itemsPerPage;
-                    root.currentIssuePage = page;
-
-                    if (page === 1) {
-                        root.fetchPullRequests(1);
-                    }
-                } else {
-                    root.errorMessage = "Failed to fetch issues: " + issuesRequest.status + " - " + issuesRequest.responseText;
-                }
-            }
-        };
-
-        issuesRequest.send();
-    }
-
-    function fetchPullRequests(page = 1) {
-        var effectiveToken = getEffectiveToken();
-        var prsRequest = new XMLHttpRequest();
-        var prsUrl = "https://api.github.com/search/issues?q=involves:" + root.githubUsername + "+state:open+is:pr&per_page=" + root.itemsPerPage + "&page=" + page + "&sort=updated";
-        prsRequest.open("GET", prsUrl);
-        prsRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        prsRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        prsRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        prsRequest.onreadystatechange = function () {
-            if (prsRequest.readyState === XMLHttpRequest.DONE) {
-                if (prsRequest.status === 200) {
-                    var searchResults = JSON.parse(prsRequest.responseText);
-                    var prs = searchResults.items || [];
-                    root.totalPRs = searchResults.total_count || 0;
-
-                    root.pullRequestsData = prs;
-                    root.hasMorePRs = prs.length === root.itemsPerPage;
-                    root.currentPRPage = page;
-
-                    if (page === 1) {
-                        root.fetchOrganizations(1);
-                    }
-                } else {
-                    root.errorMessage = "Failed to fetch PRs: " + prsRequest.status + " - " + prsRequest.responseText;
-                }
-            }
-        };
-
-        prsRequest.send();
-    }
-
-    function fetchOrganizations(page = 1) {
-        var effectiveToken = getEffectiveToken();
-        var orgsRequest = new XMLHttpRequest();
-        var orgsUrl = "https://api.github.com/users/" + root.githubUsername + "/orgs?per_page=" + root.itemsPerPage + "&page=" + page;
-        orgsRequest.open("GET", orgsUrl);
-        orgsRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        orgsRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        orgsRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        orgsRequest.onreadystatechange = function () {
-            if (orgsRequest.readyState === XMLHttpRequest.DONE) {
-                if (orgsRequest.status === 200) {
-                    var orgs = JSON.parse(orgsRequest.responseText);
-
-                    root.organizationsData = orgs;
-                    root.hasMoreOrgs = orgs.length === root.itemsPerPage;
-                    root.currentOrgPage = page;
-                } else {
-                    if (orgsRequest.status === 403) {
-                        // Don't show error for 403 on orgs, just log it
-                    } else {
-                        root.errorMessage = "Failed to fetch organizations: " + orgsRequest.status + " - " + orgsRequest.responseText;
-                    }
-                }
-                if (page === 1) {
-                    root.fetchStarredRepositories(1);
-                    root.isLoading = false;
-                }
-            }
-        };
-
-        orgsRequest.send();
-    }
-
-    function fetchStarredRepositories(page = 1) {
-        var effectiveToken = getEffectiveToken();
-        var starredRequest = new XMLHttpRequest();
-        var starredUrl = "https://api.github.com/users/" + root.githubUsername + "/starred?per_page=" + root.itemsPerPage + "&page=" + page;
-        starredRequest.open("GET", starredUrl);
-        starredRequest.setRequestHeader("Authorization", "Bearer " + effectiveToken);
-        starredRequest.setRequestHeader("Accept", "application/vnd.github+json");
-        starredRequest.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-
-        starredRequest.onreadystatechange = function () {
-            if (starredRequest.readyState === XMLHttpRequest.DONE) {
-                if (starredRequest.status === 200) {
-                    var starred = JSON.parse(starredRequest.responseText);
-
-                    root.starredRepositoriesData = starred;
-                    // Use the total count to determine if there are more pages, not just current page size
-                    var totalPages = Math.ceil(root.totalStarredRepos / root.itemsPerPage);
-
-                    // If total count is not available yet (still calculating), use fallback logic
-                    if (root.totalStarredRepos > 0) {
-                        root.hasMoreStarred = page < totalPages;
-                    } else {
-                        // Fallback: if we got a full page, assume there are more pages
-                        root.hasMoreStarred = starred.length === root.itemsPerPage;
-                    }
-                    root.currentStarredPage = page;
-                    if (root.totalStarredRepos > 0) {
-                    } else {
-                    }
-
-                    // For starred repos, we use the cached total count from calculateTotalStars
-                    // But only set it on the first page to avoid overwriting
-                    if (page === 1) {
-                        // If we don't have a total yet, use the count from the profile
-                        if (root.totalStars > 0) {
-                            root.totalStarredRepos = root.totalStars;
-                        } else {
-                            // Fallback: if total count calculation is still running, use a reasonable estimate
-                            // The pagination will update once the total count is available
-                            root.totalStarredRepos = starred.length === root.itemsPerPage ? 1000 : starred.length;
-                        }
-                    }
-                } else {
-                    root.errorMessage = "Failed to fetch starred repositories: " + starredRequest.status + " - " + starredRequest.responseText;
-                }
-            }
-        };
-
-        starredRequest.send();
-    }
-
-    Component.onCompleted: {
-        if ((root.githubToken !== "" || getEffectiveToken() !== "") && root.githubUsername !== "") {
-            root.refreshData();
-        }
+    // React to configuration changes
+    onItemsPerPageChanged: {
+        root.triggerWidthRecalculation();
     }
 
     // Watch for configuration changes and rebuild visible tabs

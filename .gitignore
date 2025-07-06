@@ -23,3 +23,8 @@ node_modules/
 # Python cache (if any)
 __pycache__/
 *.pyc
+
+# Project planning and internal docs
+PROJECT_PLAN.md
+SYSTEM_PROMPT.md
+.claude/

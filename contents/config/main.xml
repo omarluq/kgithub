@@ -18,6 +18,10 @@
       <label>Refresh interval in minutes</label>
       <default>5</default>
     </entry>
+    <entry name="itemsPerPage" type="Int">
+      <label>Items per page</label>
+      <default>5</default>
+    </entry>
     <entry name="showRepositoriesTab" type="Bool">
       <label>Show Repositories tab</label>
       <default>true</default>

@@ -1,8 +1,8 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import org.kde.plasma.components 3.0 as PlasmaComponents3
 import org.kde.kirigami 2.20 as Kirigami
+import org.kde.plasma.components 3.0 as PlasmaComponents3
 
 Rectangle {
     id: listItem
@@ -13,6 +13,80 @@ Rectangle {
 
     signal clicked(var item)
 
+    function getTitle() {
+        if (!itemData)
+            return "";
+
+        switch (itemType) {
+        case "repo":
+            return itemData.name || "";
+        case "issue":
+            return "#" + (itemData.number || "") + " " + (itemData.title || "");
+        case "pr":
+            return "#" + (itemData.number || "") + " " + (itemData.title || "");
+        case "org":
+            return itemData.login || "";
+        default:
+            return "";
+        }
+    }
+
+    function getSubtitle() {
+        if (!itemData)
+            return "";
+
+        switch (itemType) {
+        case "repo":
+            return itemData.description || "No description";
+        case "issue":
+        case "pr":
+            var repo = itemData.repository_url ? itemData.repository_url.split('/').slice(-2).join('/') : "";
+            return "by " + (itemData.user ? itemData.user.login : "") + " in " + repo;
+        case "org":
+            return itemData.description || "No description";
+        default:
+            return "";
+        }
+    }
+
+    function getStatsText() {
+        if (!itemData)
+            return "";
+
+        switch (itemType) {
+        case "repo":
+            var stars = itemData.stargazers_count || 0;
+            var forks = itemData.forks_count || 0;
+            return "⭐ " + stars + " 🍴 " + forks;
+        case "issue":
+        case "pr":
+            var comments = itemData.comments || 0;
+            return "💬 " + comments;
+        case "org":
+            var repos = itemData.public_repos || 0;
+            return "📚 " + repos + " repos";
+        default:
+            return "";
+        }
+    }
+
+    function getItemImageUrl() {
+        if (!itemData)
+            return "";
+
+        switch (itemType) {
+        case "org":
+            return itemData.avatar_url || "";
+        case "repo":
+            return itemData.owner && itemData.owner.avatar_url ? itemData.owner.avatar_url : "";
+        case "issue":
+        case "pr":
+            return itemData.user && itemData.user.avatar_url ? itemData.user.avatar_url : "";
+        default:
+            return "";
+        }
+    }
+
     Layout.fillWidth: true
     height: 60
     color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : "transparent"
@@ -20,6 +94,7 @@ Rectangle {
 
     MouseArea {
         id: mouseArea
+
         anchors.fill: parent
         hoverEnabled: true
         onClicked: {
@@ -41,6 +116,7 @@ Rectangle {
 
             Image {
                 id: itemImage
+
                 anchors.fill: parent
                 source: getItemImageUrl()
                 fillMode: Image.PreserveAspectCrop
@@ -54,21 +130,28 @@ Rectangle {
                     border.width: itemType === "org" ? 1 : 0
                     border.color: Qt.rgba(0, 0, 0, 0.1)
                 }
+
             }
 
             Kirigami.Icon {
                 anchors.fill: parent
                 source: {
-                    switch(itemType) {
-                        case "repo": return "folder-code"
-                        case "issue": return "dialog-warning"
-                        case "pr": return "merge"
-                        case "org": return "group"
-                        default: return "document"
+                    switch (itemType) {
+                    case "repo":
+                        return "folder-code";
+                    case "issue":
+                        return "dialog-warning";
+                    case "pr":
+                        return "merge";
+                    case "org":
+                        return "group";
+                    default:
+                        return "document";
                     }
                 }
                 visible: getItemImageUrl() === ""
             }
+
         }
 
         // Main content
@@ -90,99 +173,17 @@ Rectangle {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
+
         }
 
-        // Status indicator for issues/PRs
-        Rectangle {
-            width: 60
-            height: 20
-            radius: 10
-            visible: itemType === "issue" || itemType === "pr"
-            color: getStatusColor()
-
-            PlasmaComponents3.Label {
-                anchors.centerIn: parent
-                text: getStatusText()
-                color: "white"
-                font.pixelSize: 9
-                font.bold: true
-            }
-        }
-
-        // Stats for repos and orgs
+        // Stats for repos, orgs, issues, and PRs
         PlasmaComponents3.Label {
             text: getStatsText()
             opacity: 0.6
             font.pixelSize: 10
-            visible: itemType === "repo" || itemType === "org"
+            visible: itemType === "repo" || itemType === "org" || itemType === "issue" || itemType === "pr"
         }
+
     }
 
-    function getTitle() {
-        if (!itemData) return ""
-
-        switch(itemType) {
-            case "repo": return itemData.name || ""
-            case "issue": return "#" + (itemData.number || "") + " " + (itemData.title || "")
-            case "pr": return "#" + (itemData.number || "") + " " + (itemData.title || "")
-            case "org": return itemData.login || ""
-            default: return ""
-        }
-    }
-
-    function getSubtitle() {
-        if (!itemData) return ""
-
-        switch(itemType) {
-            case "repo": return itemData.description || "No description"
-            case "issue":
-            case "pr":
-                var repo = itemData.repository_url ? itemData.repository_url.split('/').slice(-2).join('/') : ""
-                return "by " + (itemData.user ? itemData.user.login : "") + " in " + repo
-            case "org": return itemData.description || "No description"
-            default: return ""
-        }
-    }
-
-    function getStatusColor() {
-        if (!itemData) return "gray"
-
-        if (itemData.state === "open") {
-            return itemType === "pr" ? "#28a745" : "#007bff"
-        } else {
-            return "#6f42c1"
-        }
-    }
-
-    function getStatusText() {
-        if (!itemData) return ""
-        return itemData.state || ""
-    }
-
-    function getStatsText() {
-        if (!itemData) return ""
-
-        switch(itemType) {
-            case "repo":
-                var stars = itemData.stargazers_count || 0
-                var forks = itemData.forks_count || 0
-                return "⭐ " + stars + " 🍴 " + forks
-            case "org":
-                var repos = itemData.public_repos || 0
-                return "📚 " + repos + " repos"
-            default: return ""
-        }
-    }
-
-    function getItemImageUrl() {
-        if (!itemData) return ""
-
-        switch(itemType) {
-            case "org": return itemData.avatar_url || ""
-            case "repo": return itemData.owner && itemData.owner.avatar_url ? itemData.owner.avatar_url : ""
-            case "issue":
-            case "pr": return itemData.user && itemData.user.avatar_url ? itemData.user.avatar_url : ""
-            default: return ""
-        }
-    }
 }

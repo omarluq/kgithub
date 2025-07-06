@@ -12,11 +12,22 @@ ColumnLayout {
     property alias cfg_githubToken: githubTokenField.text
     property alias cfg_githubUsername: githubUsernameField.text
     property alias cfg_refreshInterval: refreshIntervalSpinBox.value
+    property alias cfg_itemsPerPage: itemsPerPageSpinBox.value
     property alias cfg_showRepositoriesTab: showRepositoriesCheckBox.checked
     property alias cfg_showIssuesTab: showIssuesCheckBox.checked
     property alias cfg_showPullRequestsTab: showPullRequestsCheckBox.checked
     property alias cfg_showOrganizationsTab: showOrganizationsCheckBox.checked
     property alias cfg_showStarredTab: showStarredCheckBox.checked
+
+    property string cfg_githubTokenDefault: ""
+    property string cfg_githubUsernameDefault: ""
+    property int cfg_refreshIntervalDefault: 5
+    property int cfg_itemsPerPageDefault: 5
+    property bool cfg_showRepositoriesTabDefault: true
+    property bool cfg_showIssuesTabDefault: true
+    property bool cfg_showPullRequestsTabDefault: true
+    property bool cfg_showOrganizationsTabDefault: true
+    property bool cfg_showStarredTabDefault: true
 
     Kirigami.FormLayout {
         Layout.fillWidth: true
@@ -39,6 +50,14 @@ ColumnLayout {
             Kirigami.FormData.label: "Refresh interval (minutes):"
             from: 1
             to: 60
+            value: 5
+        }
+
+        PlasmaComponents3.SpinBox {
+            id: itemsPerPageSpinBox
+            Kirigami.FormData.label: "Items per page:"
+            from: 3
+            to: 20
             value: 5
         }
     }
