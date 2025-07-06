@@ -19,6 +19,16 @@ ColumnLayout {
     property alias cfg_showOrganizationsTab: showOrganizationsCheckBox.checked
     property alias cfg_showStarredTab: showStarredCheckBox.checked
 
+    property string cfg_githubTokenDefault: ""
+    property string cfg_githubUsernameDefault: ""
+    property int cfg_refreshIntervalDefault: 5
+    property int cfg_itemsPerPageDefault: 5
+    property bool cfg_showRepositoriesTabDefault: true
+    property bool cfg_showIssuesTabDefault: true
+    property bool cfg_showPullRequestsTabDefault: true
+    property bool cfg_showOrganizationsTabDefault: true
+    property bool cfg_showStarredTabDefault: true
+
     Kirigami.FormLayout {
         Layout.fillWidth: true
 

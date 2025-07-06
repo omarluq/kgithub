@@ -217,6 +217,29 @@ QtObject {
         makeRequest(url, callback);
     }
 
+    // Detailed data fetching for issues and PRs
+    function getIssueDetails(owner, repo, issueNumber, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber;
+        makeRequest(url, callback);
+    }
+
+    function getPullRequestDetails(owner, repo, prNumber, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/pulls/" + prNumber;
+        makeRequest(url, callback);
+    }
+
+    function getIssueComments(owner, repo, issueNumber, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber + "/comments";
+        url += "?sort=created&direction=asc";
+        makeRequest(url, callback);
+    }
+
+    function getPullRequestComments(owner, repo, prNumber, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + prNumber + "/comments";
+        url += "?sort=created&direction=asc";
+        makeRequest(url, callback);
+    }
+
     // Validation helpers
     function isValidToken() {
         return token && token.length > 0;

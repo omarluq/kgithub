@@ -58,6 +58,10 @@ Rectangle {
             var stars = itemData.stargazers_count || 0;
             var forks = itemData.forks_count || 0;
             return "⭐ " + stars + " 🍴 " + forks;
+        case "issue":
+        case "pr":
+            var comments = itemData.comments || 0;
+            return "💬 " + comments;
         case "org":
             var repos = itemData.public_repos || 0;
             return "📚 " + repos + " repos";
@@ -172,12 +176,12 @@ Rectangle {
 
         }
 
-        // Stats for repos and orgs
+        // Stats for repos, orgs, issues, and PRs
         PlasmaComponents3.Label {
             text: getStatsText()
             opacity: 0.6
             font.pixelSize: 10
-            visible: itemType === "repo" || itemType === "org"
+            visible: itemType === "repo" || itemType === "org" || itemType === "issue" || itemType === "pr"
         }
 
     }

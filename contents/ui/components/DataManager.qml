@@ -21,6 +21,10 @@ Item {
     // Repository-specific data
     property var repositoryIssuesData: []
     property var repositoryPRsData: []
+    // Detailed view data
+    property var currentIssueDetail: null
+    property var currentPRDetail: null
+    property var currentItemComments: []
     // State properties
     property bool isLoading: false
     property string errorMessage: ""
@@ -401,6 +405,60 @@ Item {
             }
             dataUpdated();
         });
+    }
+
+    // Detailed data fetching
+    function fetchIssueDetails(repoFullName, issueNumber) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        githubClient.getIssueDetails(owner, repo, issueNumber, function(data, error) {
+            if (error) {
+                errorMessage = "Failed to fetch issue details: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            currentIssueDetail = data;
+            dataUpdated();
+            // Also fetch comments
+            fetchItemComments(repoFullName, issueNumber, false);
+        });
+    }
+
+    function fetchPullRequestDetails(repoFullName, prNumber) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        githubClient.getPullRequestDetails(owner, repo, prNumber, function(data, error) {
+            if (error) {
+                errorMessage = "Failed to fetch PR details: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            currentPRDetail = data;
+            dataUpdated();
+            // Also fetch comments
+            fetchItemComments(repoFullName, prNumber, true);
+        });
+    }
+
+    function fetchItemComments(repoFullName, itemNumber, isPR) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        var commentCallback = function commentCallback(data, error) {
+            if (error) {
+                errorMessage = "Failed to fetch comments: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            currentItemComments = data;
+            dataUpdated();
+        };
+        if (isPR)
+            githubClient.getPullRequestComments(owner, repo, itemNumber, commentCallback);
+        else
+            githubClient.getIssueComments(owner, repo, itemNumber, commentCallback);
     }
 
     Component.onCompleted: {
