@@ -26,4 +26,5 @@ __pycache__/
 
 # Project planning and internal docs
 PROJECT_PLAN.md
+SYSTEM_PROMPT.md
 .claude/

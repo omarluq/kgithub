@@ -2,6 +2,9 @@ import "../../github" as GitHub
 import QtQuick 2.15
 
 Item {
+    // Estimate higher number for first page if full
+    // Estimate higher number for first page if full
+
     id: dataManager
 
     // Configuration properties
@@ -15,6 +18,9 @@ Item {
     property var pullRequestsData: []
     property var organizationsData: []
     property var starredRepositoriesData: []
+    // Repository-specific data
+    property var repositoryIssuesData: []
+    property var repositoryPRsData: []
     // State properties
     property bool isLoading: false
     property string errorMessage: ""
@@ -36,6 +42,13 @@ Item {
     property int totalPRs: 0
     property int totalOrgs: 0
     property int totalStarredRepos: 0
+    // Repository-specific pagination
+    property int currentRepoIssuesPage: 1
+    property int currentRepoPRsPage: 1
+    property bool hasMoreRepoIssues: true
+    property bool hasMoreRepoPRs: true
+    property int totalRepoIssues: 0
+    property int totalRepoPRs: 0
     // Cache properties
     property var userDataCache: ({
         "data": null,
@@ -333,6 +346,61 @@ Item {
         default:
             return 0;
         }
+    }
+
+    // Repository-specific data fetching
+    function fetchRepositoryIssues(repoFullName, page = 1) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        githubClient.getRepositoryIssues(owner, repo, page, itemsPerPage, function(data, error) {
+            if (error) {
+                errorMessage = "Failed to fetch repository issues: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            repositoryIssuesData = data;
+            hasMoreRepoIssues = data.length === itemsPerPage;
+            currentRepoIssuesPage = page;
+            // Estimate total count based on pagination
+            if (page === 1) {
+                if (data.length < itemsPerPage)
+                    totalRepoIssues = data.length;
+                else
+                    totalRepoIssues = Math.max(data.length * 5, 100);
+            } else {
+                // Update estimate based on current page
+                totalRepoIssues = Math.max(totalRepoIssues, (page - 1) * itemsPerPage + data.length);
+            }
+            dataUpdated();
+        });
+    }
+
+    function fetchRepositoryPRs(repoFullName, page = 1) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        githubClient.getRepositoryPullRequests(owner, repo, page, itemsPerPage, function(data, error) {
+            if (error) {
+                errorMessage = "Failed to fetch repository pull requests: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            repositoryPRsData = data;
+            hasMoreRepoPRs = data.length === itemsPerPage;
+            currentRepoPRsPage = page;
+            // Estimate total count based on pagination
+            if (page === 1) {
+                if (data.length < itemsPerPage)
+                    totalRepoPRs = data.length;
+                else
+                    totalRepoPRs = Math.max(data.length * 5, 100);
+            } else {
+                // Update estimate based on current page
+                totalRepoPRs = Math.max(totalRepoPRs, (page - 1) * itemsPerPage + data.length);
+            }
+            dataUpdated();
+        });
     }
 
     Component.onCompleted: {

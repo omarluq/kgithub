@@ -20,40 +20,88 @@ PlasmoidItem {
     readonly property bool showStarredTab: plasmoid.configuration.showStarredTab !== undefined ? plasmoid.configuration.showStarredTab : true
     readonly property int itemsPerPage: plasmoid.configuration.itemsPerPage || 5
 
+    // Repository context mode
+    property bool inRepositoryContext: false
+    property var currentRepository: null
+    property string previousTabId: ""
+
     // Dynamic tab management
     property var visibleTabs: buildVisibleTabsList()
 
     function buildVisibleTabsList() {
         var tabs = [];
-        if (root.showRepositoriesTab) tabs.push({id: "repos", name: "Repos", data: dataManager.repositoriesData});
-        if (root.showIssuesTab) tabs.push({id: "issues", name: "Issues", data: dataManager.issuesData});
-        if (root.showPullRequestsTab) tabs.push({id: "prs", name: "PRs", data: dataManager.pullRequestsData});
-        if (root.showOrganizationsTab) tabs.push({id: "orgs", name: "Orgs", data: dataManager.organizationsData});
-        if (root.showStarredTab) tabs.push({id: "starred", name: "Starred", data: dataManager.starredRepositoriesData});
+
+        if (root.inRepositoryContext) {
+            // In repository context, only show Issues and PRs tabs
+            tabs.push({id: "repo-issues", name: "Issues", data: dataManager.repositoryIssuesData});
+            tabs.push({id: "repo-prs", name: "PRs", data: dataManager.repositoryPRsData});
+        } else {
+            // Global context - show all enabled tabs
+            if (root.showRepositoriesTab) tabs.push({id: "repos", name: "Repos", data: dataManager.repositoriesData});
+            if (root.showIssuesTab) tabs.push({id: "issues", name: "Issues", data: dataManager.issuesData});
+            if (root.showPullRequestsTab) tabs.push({id: "prs", name: "PRs", data: dataManager.pullRequestsData});
+            if (root.showOrganizationsTab) tabs.push({id: "orgs", name: "Orgs", data: dataManager.organizationsData});
+            if (root.showStarredTab) tabs.push({id: "starred", name: "Starred", data: dataManager.starredRepositoriesData});
+        }
+
         return tabs;
     }
 
-    // Store tab display texts to avoid binding loops
-    property var tabDisplayTexts: ({})
-
     // Store current tab index to preserve across data updates
     property int currentTabIndex: 0
-
-    function updateTabDisplayTexts() {
-        tabDisplayTexts = {
-            "repos": "Repos",
-            "issues": "Issues",
-            "prs": "PRs",
-            "orgs": "Orgs",
-            "starred": "Starred"
-        };
-    }
 
     // Width calculation trigger
     property int widthTrigger: 0
 
     function triggerWidthRecalculation() {
         widthTrigger++;
+    }
+
+    function enterRepositoryContext(repository) {
+        // Save current tab ID to return to later
+        if (root.currentTabIndex < root.visibleTabs.length) {
+            root.previousTabId = root.visibleTabs[root.currentTabIndex].id;
+        }
+
+        root.currentRepository = repository;
+        root.inRepositoryContext = true;
+        root.currentTabIndex = 0; // Reset to first tab in repo context
+
+        // Update tab structure
+        root.visibleTabs = buildVisibleTabsList();
+
+        // Fetch repository-specific data
+        dataManager.fetchRepositoryIssues(repository.full_name, 1);
+        dataManager.fetchRepositoryPRs(repository.full_name, 1);
+
+        root.triggerWidthRecalculation();
+    }
+
+    function exitRepositoryContext() {
+        root.inRepositoryContext = false;
+        root.currentRepository = null;
+
+        // Restore global tab structure first
+        var newVisibleTabs = buildVisibleTabsList();
+
+        // Find the correct tab index before updating visibleTabs
+        var targetIndex = 0; // Default fallback
+        for (var i = 0; i < newVisibleTabs.length; i++) {
+            if (newVisibleTabs[i].id === root.previousTabId) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        // Update tabs and index together
+        root.visibleTabs = newVisibleTabs;
+        root.currentTabIndex = targetIndex;
+        // Force TabBar to sync its currentIndex
+        if (tabBar.currentIndex !== targetIndex) {
+            tabBar.currentIndex = targetIndex;
+        }
+
+        root.triggerWidthRecalculation();
     }
 
     // Data Manager - centralized data handling
@@ -65,7 +113,6 @@ PlasmoidItem {
 
         onDataUpdated: {
             // Trigger UI updates when data changes
-            root.updateTabDisplayTexts();
             root.triggerWidthRecalculation();
         }
 
@@ -172,8 +219,6 @@ PlasmoidItem {
         }
 
         Component.onCompleted: {
-            // Initialize tab display texts
-            root.updateTabDisplayTexts();
             if (root.githubToken !== "" && root.githubUsername !== "") {
                 if (!dataManager.userData) {
                     dataManager.refreshData();
@@ -190,15 +235,32 @@ PlasmoidItem {
             RowLayout {
                 Layout.fillWidth: true
 
+                // Back button (only visible in repository context)
+                PlasmaComponents3.Button {
+                    icon.name: "go-previous"
+                    visible: root.inRepositoryContext
+                    onClicked: root.exitRepositoryContext()
+                    PlasmaComponents3.ToolTip.text: "Back to global view"
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
+
                 Kirigami.Heading {
-                    text: "KGithub"
+                    text: root.inRepositoryContext && root.currentRepository ?
+                          root.currentRepository.full_name : "KGithub"
                     level: 3
                     Layout.fillWidth: true
                 }
 
                 PlasmaComponents3.Button {
                     icon.name: "view-refresh"
-                    onClicked: dataManager.refreshData(true)
+                    onClicked: {
+                        if (root.inRepositoryContext && root.currentRepository) {
+                            dataManager.fetchRepositoryIssues(root.currentRepository.full_name, 1);
+                            dataManager.fetchRepositoryPRs(root.currentRepository.full_name, 1);
+                        } else {
+                            dataManager.refreshData(true);
+                        }
+                    }
                     enabled: !dataManager.isLoading
                 }
             }
@@ -223,8 +285,9 @@ PlasmoidItem {
 
                 Repeater {
                     model: root.visibleTabs
-                    PlasmaComponents3.TabButton {
-                        text: root.tabDisplayTexts[modelData.id] || modelData.name
+                    delegate: PlasmaComponents3.TabButton {
+                        text: modelData.name
+                        width: implicitWidth
                     }
                 }
             }
@@ -235,212 +298,143 @@ PlasmoidItem {
                 Layout.fillHeight: true
                 currentIndex: root.currentTabIndex
 
-                // Repositories tab
-                ColumnLayout {
-                    visible: root.showRepositoriesTab
-                    spacing: Kirigami.Units.smallSpacing
+                Repeater {
+                    model: root.visibleTabs
 
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
+                    ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        property string tabId: modelData.id
 
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: dataManager.repositoriesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
 
-                        ListView {
-                            id: reposList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(dataManager.repositoriesData.length, root.itemsPerPage)
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                            ScrollBar.vertical.policy: {
+                                var dataLength = 0;
+                                switch(tabId) {
+                                    case "repos": dataLength = dataManager.repositoriesData.length; break;
+                                    case "issues": dataLength = dataManager.issuesData.length; break;
+                                    case "prs": dataLength = dataManager.pullRequestsData.length; break;
+                                    case "orgs": dataLength = dataManager.organizationsData.length; break;
+                                    case "starred": dataLength = dataManager.starredRepositoriesData.length; break;
+                                    case "repo-issues": dataLength = dataManager.repositoryIssuesData.length; break;
+                                    case "repo-prs": dataLength = dataManager.repositoryPRsData.length; break;
+                                }
+                                return dataLength === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded;
+                            }
 
-                            delegate: Components.UnifiedListItem {
-                                itemData: dataManager.repositoriesData[index]
-                                itemType: "repo"
-                                itemIndex: index
-                                width: reposList.width
-                                onClicked: function (item) {
+                            ListView {
+                                boundsBehavior: Flickable.StopAtBounds
+                                spacing: 2
+                                model: {
+                                    switch(tabId) {
+                                        case "repos": return dataManager.repositoriesData;
+                                        case "issues": return dataManager.issuesData;
+                                        case "prs": return dataManager.pullRequestsData;
+                                        case "orgs": return dataManager.organizationsData;
+                                        case "starred": return dataManager.starredRepositoriesData;
+                                        case "repo-issues": return dataManager.repositoryIssuesData;
+                                        case "repo-prs": return dataManager.repositoryPRsData;
+                                        default: return [];
+                                    }
+                                }
+
+                                delegate: Components.UnifiedListItem {
+                                    itemData: modelData
+                                    itemType: {
+                                        switch(tabId) {
+                                            case "repos": return "repo";
+                                            case "issues":
+                                            case "repo-issues": return "issue";
+                                            case "prs":
+                                            case "repo-prs": return "pr";
+                                            case "orgs": return "org";
+                                            case "starred": return "repo";
+                                            default: return "repo";
+                                        }
+                                    }
+                                    itemIndex: index
+                                    width: parent.width
+                                    onClicked: function (item) {
+                                        console.log("Item clicked - tabId:", tabId, "item:", item.full_name || item.name);
+                                        if (tabId === "repos" || tabId === "starred") {
+                                            console.log("Entering repository context for:", item.full_name);
+                                            root.enterRepositoryContext(item);
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: dataManager.getCurrentPageForTab("repos")
-                        hasMore: dataManager.getHasMoreForTab("repos")
-                        totalItems: dataManager.getTotalItemsForTab("repos")
-                        currentPageItems: dataManager.repositoriesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            dataManager.fetchDataForTab("repos", page);
-                        }
-                    }
-                }
-
-                // Issues tab
-                ColumnLayout {
-                    visible: root.showIssuesTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: dataManager.issuesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: issuesList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(dataManager.issuesData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: dataManager.issuesData[index]
-                                itemType: "issue"
-                                itemIndex: index
-                                width: issuesList.width
-                                onClicked: function (item) {
+                        Components.PaginationControls {
+                            Layout.fillWidth: true
+                            currentPage: {
+                                switch(tabId) {
+                                    case "repos": return dataManager.getCurrentPageForTab("repos");
+                                    case "issues": return dataManager.getCurrentPageForTab("issues");
+                                    case "prs": return dataManager.getCurrentPageForTab("prs");
+                                    case "orgs": return dataManager.getCurrentPageForTab("orgs");
+                                    case "starred": return dataManager.getCurrentPageForTab("starred");
+                                    case "repo-issues": return dataManager.currentRepoIssuesPage;
+                                    case "repo-prs": return dataManager.currentRepoPRsPage;
+                                    default: return 1;
                                 }
                             }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: dataManager.getCurrentPageForTab("issues")
-                        hasMore: dataManager.getHasMoreForTab("issues")
-                        totalItems: dataManager.getTotalItemsForTab("issues")
-                        currentPageItems: dataManager.issuesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            dataManager.fetchDataForTab("issues", page);
-                        }
-                    }
-                }
-
-                // Pull Requests tab
-                ColumnLayout {
-                    visible: root.showPullRequestsTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: dataManager.pullRequestsData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: prsList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(dataManager.pullRequestsData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: dataManager.pullRequestsData[index]
-                                itemType: "pr"
-                                itemIndex: index
-                                width: prsList.width
-                                onClicked: function (item) {
+                            hasMore: {
+                                switch(tabId) {
+                                    case "repos": return dataManager.getHasMoreForTab("repos");
+                                    case "issues": return dataManager.getHasMoreForTab("issues");
+                                    case "prs": return dataManager.getHasMoreForTab("prs");
+                                    case "orgs": return dataManager.getHasMoreForTab("orgs");
+                                    case "starred": return dataManager.getHasMoreForTab("starred");
+                                    case "repo-issues": return dataManager.hasMoreRepoIssues;
+                                    case "repo-prs": return dataManager.hasMoreRepoPRs;
+                                    default: return false;
                                 }
                             }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: dataManager.getCurrentPageForTab("prs")
-                        hasMore: dataManager.getHasMoreForTab("prs")
-                        totalItems: dataManager.getTotalItemsForTab("prs")
-                        currentPageItems: dataManager.pullRequestsData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            dataManager.fetchDataForTab("prs", page);
-                        }
-                    }
-                }
-
-                // Organizations tab
-                ColumnLayout {
-                    visible: root.showOrganizationsTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: dataManager.organizationsData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: orgsList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(dataManager.organizationsData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: dataManager.organizationsData[index]
-                                itemType: "org"
-                                itemIndex: index
-                                width: orgsList.width
-                                onClicked: function (item) {
+                            totalItems: {
+                                switch(tabId) {
+                                    case "repos": return dataManager.getTotalItemsForTab("repos");
+                                    case "issues": return dataManager.getTotalItemsForTab("issues");
+                                    case "prs": return dataManager.getTotalItemsForTab("prs");
+                                    case "orgs": return dataManager.getTotalItemsForTab("orgs");
+                                    case "starred": return dataManager.getTotalItemsForTab("starred");
+                                    case "repo-issues": return dataManager.totalRepoIssues;
+                                    case "repo-prs": return dataManager.totalRepoPRs;
+                                    default: return 0;
                                 }
                             }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: dataManager.getCurrentPageForTab("orgs")
-                        hasMore: dataManager.getHasMoreForTab("orgs")
-                        totalItems: dataManager.getTotalItemsForTab("orgs")
-                        currentPageItems: dataManager.organizationsData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            dataManager.fetchDataForTab("orgs", page);
-                        }
-                    }
-                }
-
-                // Starred Repositories tab
-                ColumnLayout {
-                    visible: root.showStarredTab
-                    spacing: Kirigami.Units.smallSpacing
-
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        ScrollBar.vertical.policy: dataManager.starredRepositoriesData.length === 0 ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-
-                        ListView {
-                            id: starredList
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 2
-                            model: Math.min(dataManager.starredRepositoriesData.length, root.itemsPerPage)
-
-                            delegate: Components.UnifiedListItem {
-                                itemData: dataManager.starredRepositoriesData[index]
-                                itemType: "repo"
-                                itemIndex: index
-                                width: starredList.width
-                                onClicked: function (item) {
+                            currentPageItems: {
+                                switch(tabId) {
+                                    case "repos": return dataManager.repositoriesData.length;
+                                    case "issues": return dataManager.issuesData.length;
+                                    case "prs": return dataManager.pullRequestsData.length;
+                                    case "orgs": return dataManager.organizationsData.length;
+                                    case "starred": return dataManager.starredRepositoriesData.length;
+                                    case "repo-issues": return dataManager.repositoryIssuesData.length;
+                                    case "repo-prs": return dataManager.repositoryPRsData.length;
+                                    default: return 0;
                                 }
                             }
-                        }
-                    }
-
-                    Components.PaginationControls {
-                        Layout.fillWidth: true
-                        currentPage: dataManager.getCurrentPageForTab("starred")
-                        hasMore: dataManager.getHasMoreForTab("starred")
-                        totalItems: dataManager.getTotalItemsForTab("starred")
-                        currentPageItems: dataManager.starredRepositoriesData.length
-                        itemsPerPage: root.itemsPerPage
-                        onGoToPage: function (page) {
-                            dataManager.fetchDataForTab("starred", page);
+                            itemsPerPage: root.itemsPerPage
+                            onGoToPage: function (page) {
+                                switch(tabId) {
+                                    case "repos":
+                                    case "issues":
+                                    case "prs":
+                                    case "orgs":
+                                    case "starred":
+                                        dataManager.fetchDataForTab(tabId, page);
+                                        break;
+                                    case "repo-issues":
+                                        dataManager.fetchRepositoryIssues(root.currentRepository.full_name, page);
+                                        break;
+                                    case "repo-prs":
+                                        dataManager.fetchRepositoryPRs(root.currentRepository.full_name, page);
+                                        break;
+                                }
+                            }
                         }
                     }
                 }
@@ -476,14 +470,6 @@ PlasmoidItem {
         }
     }
 
-    // Component initialization
-    Component.onCompleted: {
-        // Initialize tab display texts
-        root.updateTabDisplayTexts();
-        if (root.githubToken !== "" && root.githubUsername !== "") {
-            dataManager.refreshData();
-        }
-    }
 
     // React to configuration changes
     onItemsPerPageChanged: {

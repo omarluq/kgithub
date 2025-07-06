@@ -205,6 +205,18 @@ QtObject {
         fetchPage();
     }
 
+    function getRepositoryIssues(owner, repo, page = 1, perPage = 5, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues";
+        url += "?state=all&per_page=" + perPage + "&page=" + page + "&sort=updated";
+        makeRequest(url, callback);
+    }
+
+    function getRepositoryPullRequests(owner, repo, page = 1, perPage = 5, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/pulls";
+        url += "?state=all&per_page=" + perPage + "&page=" + page + "&sort=updated";
+        makeRequest(url, callback);
+    }
+
     // Validation helpers
     function isValidToken() {
         return token && token.length > 0;
