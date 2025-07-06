@@ -1,7 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
-import org.kde.plasma.components 3.0 as PlasmaComponents3
 import org.kde.kirigami 2.20 as Kirigami
+import org.kde.plasma.components 3.0 as PlasmaComponents3
 
 Rectangle {
     id: userCard
@@ -18,6 +18,7 @@ Rectangle {
 
     RowLayout {
         id: userInfo
+
         anchors.fill: parent
         anchors.margins: 10
         spacing: 15
@@ -45,6 +46,7 @@ Rectangle {
                     border.width: 1
                     border.color: Qt.rgba(0, 0, 0, 0.1)
                 }
+
             }
 
             Kirigami.Icon {
@@ -55,6 +57,7 @@ Rectangle {
                 visible: !userData || !userData.avatar_url
                 opacity: 0.5
             }
+
         }
 
         // User details
@@ -79,23 +82,31 @@ Rectangle {
 
             RowLayout {
                 spacing: 15
+
                 PlasmaComponents3.Label {
                     text: "📚 " + repositoryCount + " repos"
                     font.pixelSize: 11
                 }
+
                 PlasmaComponents3.Label {
                     text: "⭐ " + totalStars + " stars"
                     font.pixelSize: 11
                 }
+
                 PlasmaComponents3.Label {
                     text: "👥 " + (userData ? userData.followers : 0) + " followers"
                     font.pixelSize: 11
                 }
+
                 PlasmaComponents3.Label {
                     text: "👥 " + (userData ? userData.following : 0) + " following"
                     font.pixelSize: 11
                 }
+
             }
+
         }
+
     }
+
 }

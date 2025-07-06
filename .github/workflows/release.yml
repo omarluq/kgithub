@@ -1,0 +1,118 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Qt6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-declarative-dev-tools
+
+      - name: Run QML Linting
+        run: |
+          qmllint ./contents/**/**/*.qml
+
+      - name: Run QML Linting
+        run: |
+          qmlformat ./contents/**/**/*.qm
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "filename=kgithub-plasmoid-v$VERSION.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Create release package
+        run: |
+          tar --exclude='.git*' \
+              --exclude='node_modules' \
+              --exclude='.DS_Store' \
+              --exclude='*.swp' \
+              --exclude='package.json' \
+              --exclude='.github' \
+              -czf ${{ steps.version.outputs.filename }} \
+              contents/ metadata.json README.md LICENSE Makefile screenshots/
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgithub-plasmoid-${{ steps.version.outputs.version }}
+          path: ${{ steps.version.outputs.filename }}
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.version.outputs.filename }}
+          body: |
+            ## KGitHub Plasmoid v${{ steps.version.outputs.version }}
+
+            ### Installation
+            ```bash
+            # Extract and install
+            tar -xzf ${{ steps.version.outputs.filename }}
+            cd kgithub-plasmoid-v${{ steps.version.outputs.version }}
+            kpackagetool6 --type Plasma/Applet --install .
+            ```
+            See [README.md](README.md) for full documentation.
+
+            **⚠️ Early Development Version** - Expect bugs and breaking changes.
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Development Build (on main)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: dev-latest
+          name: "Development Build (Latest)"
+          files: ${{ steps.version.outputs.filename }}
+          body: |
+            ## 🚧 Development Build - Latest Commit
+
+            **Version:** ${{ steps.version.outputs.version }}
+            **Commit:** ${{ github.sha }}
+
+            ### ⚠️ Warning
+            This is an automated development build from the latest main branch commit.
+            - May contain bugs or incomplete features
+            - Not recommended for production use
+            - Use tagged releases for stable versions
+
+            ### Installation
+            ```bash
+            # Extract and install
+            tar -xzf ${{ steps.version.outputs.filename }}
+            kpackagetool6 --type Plasma/Applet --install .
+            ```
+          draft: false
+          prerelease: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
