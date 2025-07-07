@@ -21,6 +21,7 @@ ScrollView {
     property alias cfg_showPullRequestsTab: showPullRequestsCheckBox.checked
     property alias cfg_showOrganizationsTab: showOrganizationsCheckBox.checked
     property alias cfg_showStarredTab: showStarredCheckBox.checked
+    property alias cfg_showProfileReadmeTab: showProfileReadmeCheckBox.checked
     property alias cfg_defaultReadmeViewMode: defaultReadmeViewModeComboBox.currentIndex
     property alias cfg_defaultCommentViewMode: defaultCommentViewModeComboBox.currentIndex
     property alias cfg_showUserAvatars: showUserAvatarsCheckBox.checked
@@ -221,6 +222,12 @@ ScrollView {
         Item {
             Kirigami.FormData.isSection: true
             Kirigami.FormData.label: "Visible Tabs"
+        }
+
+        PlasmaComponents3.CheckBox {
+            id: showProfileReadmeCheckBox
+            Kirigami.FormData.label: "Show Profile README tab:"
+            checked: true
         }
 
         PlasmaComponents3.CheckBox {
