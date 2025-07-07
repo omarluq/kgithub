@@ -1,3 +1,4 @@
+import "../utils/MarkdownUtils.js" as MarkdownUtils
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -11,6 +12,8 @@ ColumnLayout {
     property var detailData: null
     property var commentsData: []
     property bool isLoading: false
+    property var repositoryInfo: null
+    property string defaultCommentViewMode: "markdown"
     property var timelineData: []
     property int currentPage: 1
     property int commentsPerPage: 3
@@ -118,6 +121,20 @@ ColumnLayout {
     spacing: 0
     onItemDataChanged: Qt.callLater(updateTimelineData)
     onCommentsDataChanged: Qt.callLater(updateTimelineData)
+
+    // Clipboard helper using TextEdit workaround
+    TextEdit {
+        id: clipboardHelper
+
+        function copyToClipboard(text) {
+            clipboardHelper.text = text;
+            clipboardHelper.selectAll();
+            clipboardHelper.copy();
+            console.log("✓ Copied to clipboard:", text);
+        }
+
+        visible: false
+    }
 
     // Single scrollable container with all content
     ScrollView {
@@ -306,6 +323,115 @@ ColumnLayout {
 
                             }
 
+                            // View mode selector
+                            PlasmaComponents3.Button {
+                                id: viewModeButton
+
+                                property string commentViewMode: defaultCommentViewMode
+
+                                icon.name: "view-visible"
+                                text: commentViewMode === "raw" ? "Raw" : "Markdown"
+                                flat: true
+                                implicitWidth: 80
+                                implicitHeight: 24
+                                onClicked: viewModeMenu.opened ? viewModeMenu.close() : viewModeMenu.popup(viewModeButton, 0, viewModeButton.height)
+
+                                PlasmaComponents3.Menu {
+                                    id: viewModeMenu
+
+                                    PlasmaComponents3.MenuItem {
+                                        text: "Raw"
+                                        icon.name: "text-plain"
+                                        checkable: true
+                                        checked: viewModeButton.commentViewMode === "raw"
+                                        onTriggered: viewModeButton.commentViewMode = "raw"
+                                    }
+
+                                    PlasmaComponents3.MenuItem {
+                                        text: "Markdown"
+                                        icon.name: "text-markdown"
+                                        checkable: true
+                                        checked: viewModeButton.commentViewMode === "markdown"
+                                        onTriggered: viewModeButton.commentViewMode = "markdown"
+                                    }
+
+                                }
+
+                            }
+
+                            // Hamburger menu
+                            PlasmaComponents3.Button {
+                                id: commentMenuButton
+
+                                icon.name: "application-menu"
+                                flat: true
+                                implicitWidth: 24
+                                implicitHeight: 24
+                                onClicked: commentContextMenu.opened ? commentContextMenu.close() : commentContextMenu.popup(commentMenuButton, 0, commentMenuButton.height)
+
+                                PlasmaComponents3.Menu {
+                                    id: commentContextMenu
+
+                                    PlasmaComponents3.MenuItem {
+                                        text: "Copy Comment Text"
+                                        icon.name: "edit-copy"
+                                        enabled: modelData.body
+                                        onTriggered: {
+                                            if (modelData.body)
+                                                clipboardHelper.copyToClipboard(modelData.body);
+
+                                        }
+                                    }
+
+                                    PlasmaComponents3.MenuItem {
+                                        text: "Copy Link"
+                                        icon.name: "edit-copy"
+                                        enabled: modelData.html_url || (repositoryInfo && itemData)
+                                        onTriggered: {
+                                            var commentUrl = modelData.html_url;
+                                            if (!commentUrl && repositoryInfo && itemData) {
+                                                // Build comment URL for GitHub
+                                                var issueType = itemData.pull_request ? "pull" : "issues";
+                                                var baseUrl = "https://github.com/" + repositoryInfo.full_name + "/" + issueType + "/" + itemData.number;
+                                                if (modelData.id)
+                                                    commentUrl = baseUrl + "#issuecomment-" + modelData.id;
+                                                else
+                                                    commentUrl = baseUrl; // For the main issue/PR description
+                                            }
+                                            if (commentUrl)
+                                                clipboardHelper.copyToClipboard(commentUrl);
+
+                                        }
+                                    }
+
+                                    PlasmaComponents3.MenuSeparator {
+                                    }
+
+                                    PlasmaComponents3.MenuItem {
+                                        text: "View on GitHub"
+                                        icon.name: "internet-services"
+                                        enabled: modelData.html_url || (repositoryInfo && itemData)
+                                        onTriggered: {
+                                            var commentUrl = modelData.html_url;
+                                            if (!commentUrl && repositoryInfo && itemData) {
+                                                // Build comment URL for GitHub
+                                                var issueType = itemData.pull_request ? "pull" : "issues";
+                                                var baseUrl = "https://github.com/" + repositoryInfo.full_name + "/" + issueType + "/" + itemData.number;
+                                                if (modelData.id)
+                                                    commentUrl = baseUrl + "#issuecomment-" + modelData.id;
+                                                else
+                                                    commentUrl = baseUrl; // For the main issue/PR description
+                                            }
+                                            if (commentUrl)
+                                                Qt.openUrlExternally(commentUrl);
+
+                                        }
+                                    }
+
+                                }
+
+                            }
+
                         }
 
                         // Comment body
@@ -314,14 +440,46 @@ ColumnLayout {
                             Layout.fillHeight: true
                             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
+                            // Raw view - pure text, no interpretation
                             PlasmaComponents3.TextArea {
+                                id: rawCommentText
+
+                                visible: viewModeButton.commentViewMode === "raw"
                                 text: modelData.body || "No content"
                                 wrapMode: Text.WordWrap
                                 textFormat: Text.PlainText
                                 selectByMouse: true
                                 readOnly: true
+                                font.family: "monospace"
+                                font.pixelSize: 11
 
-                                background: Item {
+                                background: Rectangle {
+                                    color: Qt.rgba(0, 0, 0, 0.03)
+                                    radius: 3
+                                }
+
+                            }
+
+                            // Markdown view
+                            PlasmaComponents3.TextArea {
+                                id: markdownCommentText
+
+                                visible: viewModeButton.commentViewMode === "markdown"
+                                text: {
+                                    var content = modelData.body || "No content";
+                                    // Process relative URLs for markdown comments
+                                    return MarkdownUtils.processRelativeUrls(content, repositoryInfo);
+                                }
+                                wrapMode: Text.WordWrap
+                                textFormat: Text.MarkdownText
+                                selectByMouse: true
+                                readOnly: true
+                                font.family: Kirigami.Theme.defaultFont.family
+                                font.pixelSize: 12
+
+                                background: Rectangle {
+                                    color: "transparent"
+                                    radius: 3
                                 }
 
                             }

@@ -23,6 +23,7 @@ PlasmoidItem {
     readonly property bool showIconInTitle: plasmoid.configuration.showIconInTitle !== undefined ? plasmoid.configuration.showIconInTitle : true
     readonly property bool showProfileCard: plasmoid.configuration.showProfileCard !== undefined ? plasmoid.configuration.showProfileCard : true
     readonly property int defaultReadmeViewMode: plasmoid.configuration.defaultReadmeViewMode !== undefined ? plasmoid.configuration.defaultReadmeViewMode : 2
+    readonly property int defaultCommentViewMode: plasmoid.configuration.defaultCommentViewMode !== undefined ? plasmoid.configuration.defaultCommentViewMode : 1
 
     // Navigation context modes
     property bool inRepositoryContext: false
@@ -539,6 +540,14 @@ PlasmoidItem {
                     detailData: root.currentItem && root.currentItem.pull_request ? dataManager.currentPRDetail : dataManager.currentIssueDetail
                     commentsData: dataManager.currentItemComments
                     isLoading: dataManager.isLoading
+                    repositoryInfo: root.currentRepository
+                    defaultCommentViewMode: {
+                        switch (root.defaultCommentViewMode) {
+                        case 0: return "raw";
+                        case 1: return "markdown";
+                        default: return "markdown";
+                        }
+                    }
                 }
 
                 // Tab-based view
