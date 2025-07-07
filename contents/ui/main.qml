@@ -559,6 +559,7 @@ PlasmoidItem {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 readmeData: dataManager.repositoryReadmeData
+                                repositoryInfo: root.currentRepository
                                 visible: tabId === "repo-readme"
                                 defaultViewMode: {
                                     switch (root.defaultReadmeViewMode) {

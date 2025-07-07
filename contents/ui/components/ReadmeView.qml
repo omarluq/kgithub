@@ -5,11 +5,44 @@ import org.kde.kirigami 2.20 as Kirigami
 import org.kde.plasma.components 3.0 as PlasmaComponents3
 
 Item {
+    // It's a file - use blob URL for GitHub
+    // It's likely a directory or section - use tree URL
+
     id: readmeView
 
     property var readmeData: null
     property string defaultViewMode: "rich" // "raw", "markdown", "rich"
     property string viewMode: defaultViewMode
+    property var repositoryInfo: null // Repository object with owner/name info
+
+    function processRelativeUrls(content) {
+        if (!repositoryInfo || !repositoryInfo.full_name)
+            return content;
+
+        var baseUrl = "https://github.com/" + repositoryInfo.full_name;
+        var rawBaseUrl = "https://raw.githubusercontent.com/" + repositoryInfo.full_name + "/main";
+        // Process markdown images: ![alt](./path) or ![alt](path)
+        content = content.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, function(match, alt, path) {
+            var cleanPath = path.replace(/^\.\//, "");
+            return "![" + alt + "](" + rawBaseUrl + "/" + cleanPath + ")";
+        });
+        // Process markdown links to files: [text](./path) or [text](path)
+        content = content.replace(/\[([^\]]+)\]\((?!https?:\/\/)([^)#]+)(#[^)]*)?\)/g, function(match, text, path, anchor) {
+            var cleanPath = path.replace(/^\.\//, "");
+            anchor = anchor || "";
+            // Check if it's likely a file (has extension) vs a section link
+            if (cleanPath.includes('.') && !cleanPath.endsWith('/'))
+                return "[" + text + "](" + baseUrl + "/blob/main/" + cleanPath + anchor + ")";
+            else
+                return "[" + text + "](" + baseUrl + "/tree/main/" + cleanPath + anchor + ")";
+        });
+        // Process HTML img tags: <img src="./path"> or <img src="path">
+        content = content.replace(/<img([^>]*)\ssrc=["'](?!https?:\/\/)([^"']+)["']([^>]*)>/g, function(match, before, path, after) {
+            var cleanPath = path.replace(/^\.\//, "");
+            return "<img" + before + ' src="' + rawBaseUrl + "/" + cleanPath + '"' + after + ">";
+        });
+        return content;
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -225,8 +258,9 @@ Item {
                         return "No README content available";
 
                     try {
-                        // Return raw content for Qt's markdown parser
-                        return Qt.atob(readmeData.content);
+                        // Process relative URLs for markdown view
+                        var rawContent = Qt.atob(readmeData.content);
+                        return processRelativeUrls(rawContent);
                     } catch (e) {
                         return "Error decoding README content";
                     }
@@ -253,6 +287,12 @@ Item {
                 // Convert inline code
                 // Convert links
                 // Convert line breaks
+                // Convert headers
+                // Convert bold and italic
+                // Convert inline code
+                // Convert images
+                // Convert links
+                // Convert line breaks
 
                 id: richContentText
 
@@ -264,7 +304,10 @@ Item {
                     try {
                         // Convert markdown to HTML for rich text display
                         var rawContent = Qt.atob(readmeData.content);
-                        var htmlContent = rawContent.replace(/^### (.+)$/gm, "<h3>$1</h3>").replace(/^## (.+)$/gm, "<h2>$1</h2>").replace(/^# (.+)$/gm, "<h1>$1</h1>").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>').replace(/\n/g, "<br>");
+                        // Process relative URLs first
+                        var processedContent = processRelativeUrls(rawContent);
+                        // Convert markdown to HTML
+                        var htmlContent = processedContent.replace(/^### (.+)$/gm, "<h3>$1</h3>").replace(/^## (.+)$/gm, "<h2>$1</h2>").replace(/^# (.+)$/gm, "<h1>$1</h1>").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>').replace(/\n/g, "<br>");
                         return htmlContent;
                     } catch (e) {
                         return "Error decoding README content";
