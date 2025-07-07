@@ -49,27 +49,6 @@ Rectangle {
         }
     }
 
-    function getStatsText() {
-        if (!itemData)
-            return "";
-
-        switch (itemType) {
-        case "repo":
-            var stars = itemData.stargazers_count || 0;
-            var forks = itemData.forks_count || 0;
-            return "⭐ " + stars + " 🍴 " + forks;
-        case "issue":
-        case "pr":
-            var comments = itemData.comments || 0;
-            return "💬 " + comments;
-        case "org":
-            var repos = itemData.public_repos || 0;
-            return "📚 " + repos + " repos";
-        default:
-            return "";
-        }
-    }
-
     function getItemImageUrl() {
         if (!itemData)
             return "";
@@ -88,9 +67,9 @@ Rectangle {
     }
 
     Layout.fillWidth: true
-    height: 60
+    height: 90
     color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : "transparent"
-    radius: 5
+    radius: 8
 
     MouseArea {
         id: mouseArea
@@ -104,14 +83,14 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 10
+        anchors.margins: 15
+        spacing: 15
 
         // Icon/Image based on item type
         Rectangle {
-            width: 24
-            height: 24
-            radius: itemType === "org" ? 12 : 0
+            width: 36
+            height: 36
+            radius: itemType === "org" ? 18 : 0
             color: "transparent"
 
             Image {
@@ -125,7 +104,7 @@ Rectangle {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: itemType === "org" ? 12 : 0
+                    radius: itemType === "org" ? 18 : 0
                     color: "transparent"
                     border.width: itemType === "org" ? 1 : 0
                     border.color: Qt.rgba(0, 0, 0, 0.1)
@@ -157,11 +136,12 @@ Rectangle {
         // Main content
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: 3
 
             PlasmaComponents3.Label {
                 text: getTitle()
                 font.bold: true
+                font.pixelSize: 18
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -169,7 +149,7 @@ Rectangle {
             PlasmaComponents3.Label {
                 text: getSubtitle()
                 opacity: 0.7
-                font.pixelSize: 11
+                font.pixelSize: 16
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -177,11 +157,79 @@ Rectangle {
         }
 
         // Stats for repos, orgs, issues, and PRs
-        PlasmaComponents3.Label {
-            text: getStatsText()
-            opacity: 0.6
-            font.pixelSize: 10
+        RowLayout {
+            spacing: 9
             visible: itemType === "repo" || itemType === "org" || itemType === "issue" || itemType === "pr"
+
+            // Stars and forks for repos
+            RowLayout {
+                spacing: 3
+                visible: itemType === "repo"
+
+                Kirigami.Icon {
+                    source: "rating"
+                    width: 2
+                    height: 2
+                }
+
+                PlasmaComponents3.Label {
+                    text: itemData ? (itemData.stargazers_count || 0) : 0
+                    opacity: 0.6
+                    font.pixelSize: 15
+                }
+
+                Kirigami.Icon {
+                    source: "vcs-branch"
+                    width: 2
+                    height: 2
+                }
+
+                PlasmaComponents3.Label {
+                    text: itemData ? (itemData.forks_count || 0) : 0
+                    opacity: 0.6
+                    font.pixelSize: 15
+                }
+
+            }
+
+            // Comments for issues/PRs
+            RowLayout {
+                spacing: 3
+                visible: itemType === "issue" || itemType === "pr"
+
+                Kirigami.Icon {
+                    source: "dialog-messages"
+                    width: 2
+                    height: 2
+                }
+
+                PlasmaComponents3.Label {
+                    text: itemData ? (itemData.comments || 0) : 0
+                    opacity: 0.6
+                    font.pixelSize: 15
+                }
+
+            }
+
+            // Repos for orgs
+            RowLayout {
+                spacing: 3
+                visible: itemType === "org"
+
+                Kirigami.Icon {
+                    source: "folder-code"
+                    width: 2
+                    height: 2
+                }
+
+                PlasmaComponents3.Label {
+                    text: (itemData ? (itemData.public_repos || 0) : 0) + " repos"
+                    opacity: 0.6
+                    font.pixelSize: 15
+                }
+
+            }
+
         }
 
     }

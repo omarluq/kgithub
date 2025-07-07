@@ -11,37 +11,35 @@ Rectangle {
     property int totalStars: 0
 
     Layout.fillWidth: true
-    Layout.preferredHeight: userInfo.implicitHeight + 20
+    Layout.preferredHeight: userInfo.implicitHeight + 30
     color: Kirigami.Theme.alternateBackgroundColor
-    radius: 5
+    radius: 8
     visible: userData !== null
 
     RowLayout {
         id: userInfo
 
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 15
+        anchors.margins: 15
+        spacing: 22
 
         // Profile image
         Rectangle {
-            width: 64
-            height: 64
-            radius: 32
-            color: Kirigami.Theme.alternateBackgroundColor
-            border.width: 2
-            border.color: Kirigami.Theme.highlightColor
+            width: 96
+            height: 96
+            radius: 48
+            color: "transparent"
+            border.width: 0
 
             Image {
                 anchors.fill: parent
-                anchors.margins: 2
                 source: userData ? userData.avatar_url : ""
                 fillMode: Image.PreserveAspectCrop
                 smooth: true
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 32
+                    radius: 48
                     color: "transparent"
                     border.width: 1
                     border.color: Qt.rgba(0, 0, 0, 0.1)
@@ -51,8 +49,8 @@ Rectangle {
 
             Kirigami.Icon {
                 anchors.centerIn: parent
-                width: 32
-                height: 32
+                width: 48
+                height: 48
                 source: "user-identity"
                 visible: !userData || !userData.avatar_url
                 opacity: 0.5
@@ -63,12 +61,12 @@ Rectangle {
         // User details
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 5
+            spacing: 8
 
             PlasmaComponents3.Label {
                 text: userData ? userData.login : ""
                 font.bold: true
-                font.pixelSize: 16
+                font.pixelSize: 24
                 Layout.fillWidth: true
             }
 
@@ -77,7 +75,7 @@ Rectangle {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.8
-                font.pixelSize: 12
+                font.pixelSize: 18
             }
 
         }
@@ -85,27 +83,71 @@ Rectangle {
         // Statistics grid
         GridLayout {
             columns: 2
-            rowSpacing: 5
-            columnSpacing: 15
+            rowSpacing: 8
+            columnSpacing: 22
 
-            PlasmaComponents3.Label {
-                text: "📚 " + repositoryCount + " repos"
-                font.pixelSize: 11
+            RowLayout {
+                spacing: 6
+
+                Kirigami.Icon {
+                    source: "folder-code"
+                    width: 5
+                    height: 5
+                }
+
+                PlasmaComponents3.Label {
+                    text: repositoryCount + " repos"
+                    font.pixelSize: 16
+                }
+
             }
 
-            PlasmaComponents3.Label {
-                text: "⭐ " + totalStars + " stars"
-                font.pixelSize: 11
+            RowLayout {
+                spacing: 6
+
+                Kirigami.Icon {
+                    source: "rating"
+                    width: 5
+                    height: 5
+                }
+
+                PlasmaComponents3.Label {
+                    text: totalStars + " stars"
+                    font.pixelSize: 16
+                }
+
             }
 
-            PlasmaComponents3.Label {
-                text: "👥 " + (userData ? userData.followers : 0) + " followers"
-                font.pixelSize: 11
+            RowLayout {
+                spacing: 6
+
+                Kirigami.Icon {
+                    source: "group"
+                    width: 5
+                    height: 5
+                }
+
+                PlasmaComponents3.Label {
+                    text: (userData ? userData.followers : 0) + " followers"
+                    font.pixelSize: 16
+                }
+
             }
 
-            PlasmaComponents3.Label {
-                text: "👤 " + (userData ? userData.following : 0) + " following"
-                font.pixelSize: 11
+            RowLayout {
+                spacing: 6
+
+                Kirigami.Icon {
+                    source: "user"
+                    width: 5
+                    height: 5
+                }
+
+                PlasmaComponents3.Label {
+                    text: (userData ? userData.following : 0) + " following"
+                    font.pixelSize: 16
+                }
+
             }
 
         }

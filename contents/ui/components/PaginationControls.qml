@@ -33,6 +33,7 @@ RowLayout {
     // Previous button
     PlasmaComponents3.Button {
         icon.name: "go-previous"
+        flat: true
         enabled: currentPage > 1
         onClicked: {
             paginationControls.goToPage(currentPage - 1);
@@ -49,6 +50,7 @@ RowLayout {
     // Next button
     PlasmaComponents3.Button {
         icon.name: "go-next"
+        flat: true
         enabled: currentPage < totalPages && hasMore
         onClicked: {
             paginationControls.goToPage(currentPage + 1);

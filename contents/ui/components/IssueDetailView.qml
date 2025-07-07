@@ -79,13 +79,13 @@ ColumnLayout {
 
     function updateTimelineData() {
         var timeline = [];
-        // Add initial description as first item
-        if (itemData && itemData.body)
+        // Add initial description as first item (always include, even if body is empty)
+        if (itemData)
             timeline.push({
             "type": "description",
             "author": itemData.user,
             "created_at": itemData.created_at,
-            "body": itemData.body
+            "body": itemData.body || ""
         });
 
         // Add comments
@@ -123,12 +123,16 @@ ColumnLayout {
     ScrollView {
         Layout.fillWidth: true
         Layout.fillHeight: true
+        Layout.preferredHeight: contentColumn.implicitHeight
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
         contentWidth: availableWidth
 
         ColumnLayout {
+            id: contentColumn
+
             width: parent.width
-            spacing: 4
+            spacing: 9
 
             // Header with title and status
             RowLayout {
@@ -138,24 +142,25 @@ ColumnLayout {
 
                 Kirigami.Icon {
                     source: getItemIcon()
-                    width: 20
-                    height: 20
+                    width: 30
+                    height: 30
                 }
 
                 PlasmaComponents3.Label {
                     text: itemData ? itemData.title : ""
                     font.bold: true
+                    font.pixelSize: 22
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: 300
                 }
 
                 // Status badge
                 Rectangle {
                     color: getStatusColor()
-                    radius: 12
-                    implicitWidth: statusLabel.implicitWidth + 16
-                    implicitHeight: statusLabel.implicitHeight + 8
+                    radius: 18
+                    implicitWidth: statusLabel.implicitWidth + 24
+                    implicitHeight: statusLabel.implicitHeight + 12
 
                     PlasmaComponents3.Label {
                         id: statusLabel
@@ -163,7 +168,7 @@ ColumnLayout {
                         anchors.centerIn: parent
                         text: getStatusText()
                         color: "white"
-                        font.pixelSize: 10
+                        font.pixelSize: 15
                         font.bold: true
                     }
 
@@ -171,54 +176,10 @@ ColumnLayout {
 
             }
 
-            // Author and date info
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.topMargin: -6
-
-                Rectangle {
-                    width: 24
-                    height: 24
-                    radius: 12
-                    color: "transparent"
-
-                    Image {
-                        anchors.fill: parent
-                        source: itemData && itemData.user ? itemData.user.avatar_url : ""
-                        fillMode: Image.PreserveAspectCrop
-                        smooth: true
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 12
-                            color: "transparent"
-                            border.width: 1
-                            border.color: Qt.rgba(0, 0, 0, 0.1)
-                        }
-
-                    }
-
-                }
-
-                PlasmaComponents3.Label {
-                    text: {
-                        if (!itemData || !itemData.user)
-                            return "";
-
-                        var date = new Date(itemData.created_at);
-                        var dateStr = date.toLocaleDateString();
-                        return itemData.user.login + " opened this " + getItemType() + " on " + dateStr;
-                    }
-                    opacity: 0.7
-                    font.pixelSize: 11
-                }
-
-            }
-
             // Labels if any
             Flow {
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: 6
                 visible: itemData && itemData.labels && itemData.labels.length > 0
 
                 Repeater {
@@ -226,9 +187,9 @@ ColumnLayout {
 
                     Rectangle {
                         color: "#" + modelData.color
-                        radius: 8
-                        implicitWidth: labelText.implicitWidth + 12
-                        implicitHeight: labelText.implicitHeight + 6
+                        radius: 12
+                        implicitWidth: labelText.implicitWidth + 18
+                        implicitHeight: labelText.implicitHeight + 9
 
                         PlasmaComponents3.Label {
                             id: labelText
@@ -236,13 +197,22 @@ ColumnLayout {
                             anchors.centerIn: parent
                             text: modelData.name
                             color: "white"
-                            font.pixelSize: 10
+                            font.pixelSize: 15
                         }
 
                     }
 
                 }
 
+            }
+
+            // Separator line
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: 18
+                Layout.bottomMargin: 18
+                height: 1
+                color: Qt.rgba(0.5, 0.5, 0.5, 0.3)
             }
 
             // Timeline - properly integrated
@@ -251,25 +221,25 @@ ColumnLayout {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 120
+                    height: 180
                     color: "transparent"
                     border.width: 1
                     border.color: Qt.rgba(0.5, 0.5, 0.5, 0.2)
-                    radius: 6
+                    radius: 9
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 6
-                        spacing: 2
+                        anchors.margins: 9
+                        spacing: 3
 
                         // Author and timestamp
                         RowLayout {
                             Layout.fillWidth: true
 
                             Rectangle {
-                                width: 20
-                                height: 20
-                                radius: 10
+                                width: 30
+                                height: 30
+                                radius: 15
                                 color: "transparent"
 
                                 Image {
@@ -280,7 +250,7 @@ ColumnLayout {
 
                                     Rectangle {
                                         anchors.fill: parent
-                                        radius: 10
+                                        radius: 15
                                         color: "transparent"
                                         border.width: 1
                                         border.color: Qt.rgba(0, 0, 0, 0.1)
@@ -290,17 +260,29 @@ ColumnLayout {
 
                             }
 
-                            PlasmaComponents3.Label {
-                                text: {
-                                    var author = modelData.author ? modelData.author.login : "Unknown";
-                                    var date = new Date(modelData.created_at);
-                                    var dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
-                                    var action = modelData.type === "description" ? "opened this" : "commented";
-                                    return author + " " + action + " on " + dateStr;
+                            ColumnLayout {
+                                spacing: 2
+
+                                PlasmaComponents3.Label {
+                                    text: {
+                                        var author = modelData.author ? modelData.author.login : "Unknown";
+                                        var action = modelData.type === "description" ? "opened this" : "commented";
+                                        return author + " " + action;
+                                    }
+                                    font.bold: modelData.type === "description"
+                                    opacity: 0.8
+                                    font.pixelSize: 15
                                 }
-                                font.bold: modelData.type === "description"
-                                opacity: 0.8
-                                font.pixelSize: 10
+
+                                PlasmaComponents3.Label {
+                                    text: {
+                                        var date = new Date(modelData.created_at);
+                                        return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+                                    }
+                                    opacity: 0.6
+                                    font.pixelSize: 12
+                                }
+
                             }
 
                             Item {
@@ -308,17 +290,17 @@ ColumnLayout {
                             }
 
                             Rectangle {
-                                visible: modelData.type === "description"
+                                visible: modelData.author && itemData && itemData.user && modelData.author.login === itemData.user.login
                                 color: "#0969da"
-                                radius: 8
-                                implicitWidth: 60
-                                implicitHeight: 16
+                                radius: 12
+                                implicitWidth: 90
+                                implicitHeight: 24
 
                                 PlasmaComponents3.Label {
                                     anchors.centerIn: parent
                                     text: "Author"
                                     color: "white"
-                                    font.pixelSize: 9
+                                    font.pixelSize: 14
                                     font.bold: true
                                 }
 
@@ -355,11 +337,12 @@ ColumnLayout {
             // Pagination controls
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 8
+                Layout.topMargin: 12
                 visible: timelineData.length > commentsPerPage
 
                 PlasmaComponents3.Button {
                     text: "Previous"
+                    flat: true
                     enabled: paginatedTimelineData.hasPrevious
                     onClicked: previousPage()
                 }
@@ -371,7 +354,7 @@ ColumnLayout {
                 PlasmaComponents3.Label {
                     text: "Page " + paginatedTimelineData.currentPage + " of " + paginatedTimelineData.totalPages
                     opacity: 0.7
-                    font.pixelSize: 10
+                    font.pixelSize: 15
                 }
 
                 Item {
@@ -380,6 +363,7 @@ ColumnLayout {
 
                 PlasmaComponents3.Button {
                     text: "Next"
+                    flat: true
                     enabled: paginatedTimelineData.hasNext
                     onClicked: nextPage()
                 }
