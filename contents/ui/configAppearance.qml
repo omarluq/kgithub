@@ -19,6 +19,7 @@ ColumnLayout {
     property alias cfg_showOrganizationsTab: showOrganizationsCheckBox.checked
     property alias cfg_showStarredTab: showStarredCheckBox.checked
     property alias cfg_defaultReadmeViewMode: defaultReadmeViewModeComboBox.currentIndex
+    property alias cfg_defaultCommentViewMode: defaultCommentViewModeComboBox.currentIndex
 
     property int cfg_iconThemeDefault: 0
     property bool cfg_showIconInTitleDefault: true
@@ -30,6 +31,7 @@ ColumnLayout {
     property bool cfg_showOrganizationsTabDefault: true
     property bool cfg_showStarredTabDefault: true
     property int cfg_defaultReadmeViewModeDefault: 2
+    property int cfg_defaultCommentViewModeDefault: 1
 
     Kirigami.FormLayout {
         Layout.fillWidth: true
@@ -99,6 +101,14 @@ ColumnLayout {
             Kirigami.FormData.label: "Default README view mode:"
             model: ["Raw", "Markdown", "Rich"]
             currentIndex: 2
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+        }
+
+        PlasmaComponents3.ComboBox {
+            id: defaultCommentViewModeComboBox
+            Kirigami.FormData.label: "Default comment view mode:"
+            model: ["Raw", "Markdown"]
+            currentIndex: 1
             Layout.preferredWidth: Kirigami.Units.gridUnit * 8
         }
 
