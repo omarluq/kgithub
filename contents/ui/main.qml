@@ -19,6 +19,9 @@ PlasmoidItem {
     readonly property bool showOrganizationsTab: plasmoid.configuration.showOrganizationsTab !== undefined ? plasmoid.configuration.showOrganizationsTab : true
     readonly property bool showStarredTab: plasmoid.configuration.showStarredTab !== undefined ? plasmoid.configuration.showStarredTab : true
     readonly property int itemsPerPage: plasmoid.configuration.itemsPerPage || 5
+    readonly property int iconTheme: plasmoid.configuration.iconTheme !== undefined ? plasmoid.configuration.iconTheme : 0
+    readonly property bool showIconInTitle: plasmoid.configuration.showIconInTitle !== undefined ? plasmoid.configuration.showIconInTitle : true
+    readonly property bool showProfileCard: plasmoid.configuration.showProfileCard !== undefined ? plasmoid.configuration.showProfileCard : true
 
     // Navigation context modes
     property bool inRepositoryContext: false
@@ -229,7 +232,7 @@ PlasmoidItem {
             anchors.centerIn: parent
             width: Math.min(parent.width, parent.height) * 0.8
             height: width
-            source: dataManager.isLoading ? "" : Qt.resolvedUrl("../assets/icons/icons8-github.svg")
+            source: dataManager.isLoading ? "" : Qt.resolvedUrl("../assets/icons/icons8-github" + (root.iconTheme === 1 ? "-light" : "") + ".svg")
             fillMode: Image.PreserveAspectFit
             smooth: true
 
@@ -299,7 +302,7 @@ PlasmoidItem {
 
             // Base component heights (scaled 1.5x)
             var headerHeight = 60;
-            var profileCardHeight = dataManager.userData ? 126 : 0; // Hide if no user data
+            var profileCardHeight = (dataManager.userData && root.showProfileCard) ? 126 : 0; // Hide if no user data or disabled
             var tabBarHeight = root.inDetailContext ? 0 : 48; // No tabs in detail view
             var margins = 30; // Top and bottom margins
             var errorHeight = dataManager.errorMessage !== "" ? 36 : 0;
@@ -401,18 +404,43 @@ PlasmoidItem {
                     PlasmaComponents3.ToolTip.visible: hovered
                 }
 
-                Kirigami.Heading {
-                    text: {
-                        if (root.inDetailContext && root.currentRepository && root.currentItem) {
-                            return root.currentRepository.full_name + " #" + root.currentItem.number;
-                        } else if (root.inRepositoryContext && root.currentRepository) {
-                            return root.currentRepository.full_name;
-                        } else {
-                            return "KGithub";
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Image {
+                        width: 20
+                        height: 20
+                        source: Qt.resolvedUrl("../assets/icons/icons8-github" + (root.iconTheme === 1 ? "-light" : "") + ".svg")
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        visible: {
+                            if (!root.showIconInTitle) {
+                                return false; // Hide if disabled in settings
+                            }
+                            if (root.inDetailContext && root.currentRepository && root.currentItem) {
+                                return false; // Hide in detail context
+                            } else if (root.inRepositoryContext && root.currentRepository) {
+                                return false; // Hide in repository context
+                            } else {
+                                return true; // Show only in global context
+                            }
                         }
                     }
-                    level: 3
-                    Layout.fillWidth: true
+
+                    Kirigami.Heading {
+                        text: {
+                            if (root.inDetailContext && root.currentRepository && root.currentItem) {
+                                return root.currentRepository.full_name + " #" + root.currentItem.number;
+                            } else if (root.inRepositoryContext && root.currentRepository) {
+                                return root.currentRepository.full_name;
+                            } else {
+                                return "KGithub";
+                            }
+                        }
+                        level: 3
+                        Layout.fillWidth: true
+                    }
                 }
 
                 PlasmaComponents3.Button {
@@ -437,6 +465,7 @@ PlasmoidItem {
                 userData: dataManager.userData
                 repositoryCount: dataManager.totalRepos
                 totalStars: dataManager.totalStars
+                visible: root.showProfileCard
             }
 
             // Tab bar
