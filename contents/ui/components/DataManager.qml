@@ -19,6 +19,7 @@ Item {
     property var organizationsData: []
     property var starredRepositoriesData: []
     property var commitActivityData: null
+    property var profileReadmeData: null
     // Repository-specific data
     property var repositoryIssuesData: []
     property var repositoryPRsData: []
@@ -143,9 +144,10 @@ Item {
             widthRecalculationNeeded();
             // Cache the user data
             updateCache(userDataCache, data);
-            // Calculate total stars and fetch commit activity
+            // Calculate total stars, fetch commit activity, and profile README
             calculateTotalStars();
             fetchCommitActivity();
+            fetchProfileReadme();
             isLoading = false;
         });
     }
@@ -560,6 +562,25 @@ Item {
     // Function to load more comments for timeline pagination
     function loadMoreComments(repoFullName, itemNumber, isPR, nextPage) {
         fetchItemComments(repoFullName, itemNumber, isPR, nextPage);
+    }
+
+    function fetchProfileReadme() {
+        if (!githubUsername) {
+            console.log("No GitHub username configured for profile README");
+            return ;
+        }
+        console.log("Fetching profile README for:", githubUsername);
+        githubClient.getUserProfileReadme(githubUsername, function(data, error) {
+            if (error) {
+                console.log("Profile README not found or error:", error.message);
+                // Don't show error for missing profile README - just set to null
+                profileReadmeData = null;
+            } else {
+                console.log("Profile README fetched successfully:", data.name || "README");
+                profileReadmeData = data;
+            }
+            dataUpdated();
+        });
     }
 
     Component.onCompleted: {

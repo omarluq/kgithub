@@ -90,6 +90,10 @@
       <label>Show PR author avatars</label>
       <default>true</default>
     </entry>
+    <entry name="showProfileReadmeTab" type="Bool">
+      <label>Show Profile README tab</label>
+      <default>true</default>
+    </entry>
   </group>
 
 </kcfg>

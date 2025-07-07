@@ -193,6 +193,8 @@ Item {
             PlasmaComponents3.TextArea {
                 id: rawContentText
 
+                width: parent.width
+                height: Math.max(parent.height, implicitHeight)
                 visible: viewMode === "raw"
                 text: {
                     if (!readmeData || !readmeData.content)
@@ -214,7 +216,7 @@ Item {
                 padding: 8
 
                 background: Rectangle {
-                    color: Qt.rgba(0, 0, 0, 0.03)
+                    color: "transparent"
                     radius: 3
                 }
 
@@ -224,6 +226,8 @@ Item {
             PlasmaComponents3.TextArea {
                 id: markdownContentText
 
+                width: parent.width
+                height: Math.max(parent.height, implicitHeight)
                 visible: viewMode === "markdown"
                 text: {
                     if (!readmeData || !readmeData.content)
@@ -270,6 +274,8 @@ Item {
 
                 id: richContentText
 
+                width: parent.width
+                height: Math.max(parent.height, implicitHeight)
                 visible: viewMode === "rich"
                 text: {
                     if (!readmeData || !readmeData.content)

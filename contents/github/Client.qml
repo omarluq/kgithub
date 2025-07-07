@@ -570,4 +570,10 @@ QtObject {
     function isRateLimited() {
         return rateLimitRemaining !== -1 && rateLimitRemaining <= 0;
     }
+
+    // Get user profile README
+    function getUserProfileReadme(username, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(username) + "/" + encodeURIComponent(username) + "/readme";
+        makeRequest(url, callback);
+    }
 }
