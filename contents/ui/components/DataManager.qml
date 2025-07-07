@@ -21,6 +21,7 @@ Item {
     // Repository-specific data
     property var repositoryIssuesData: []
     property var repositoryPRsData: []
+    property var repositoryReadmeData: null
     // Detailed view data
     property var currentIssueDetail: null
     property var currentPRDetail: null
@@ -408,6 +409,25 @@ Item {
                 totalRepoPRs = Math.max(totalRepoPRs, (page - 1) * itemsPerPage + data.length);
             }
             dataUpdated();
+        });
+    }
+
+    function fetchRepositoryReadme(repoFullName) {
+        var repoPath = repoFullName.split('/');
+        var owner = repoPath[0];
+        var repo = repoPath[1];
+        console.log("Fetching README for:", repoFullName);
+        githubClient.getRepositoryReadme(owner, repo, function(data, error) {
+            if (error) {
+                console.log("README fetch error:", error.message);
+                // Don't show error for missing README - just set to null
+                repositoryReadmeData = null;
+            } else {
+                console.log("README fetched successfully:", data.name || "README");
+                repositoryReadmeData = data;
+            }
+            dataUpdated();
+            widthRecalculationNeeded(); // Trigger tab rebuilding
         });
     }
 
