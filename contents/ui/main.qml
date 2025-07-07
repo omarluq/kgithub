@@ -26,9 +26,10 @@ PlasmoidItem {
     property var currentRepository: null
     property var currentItem: null  // Current issue or PR being viewed
     property string previousTabId: ""
+    property string previousGlobalTabId: "" // For repository → global navigation
 
     // Dynamic tab management
-    property var visibleTabs: buildVisibleTabsList()
+    property var visibleTabs: []
 
     function buildVisibleTabsList() {
         var tabs = [];
@@ -96,9 +97,9 @@ PlasmoidItem {
     }
 
     function enterRepositoryContext(repository) {
-        // Save current tab ID to return to later
+        // Save current global tab ID to return to later
         if (root.currentTabIndex < root.visibleTabs.length) {
-            root.previousTabId = root.visibleTabs[root.currentTabIndex].id;
+            root.previousGlobalTabId = root.visibleTabs[root.currentTabIndex].id;
         }
 
         root.currentRepository = repository;
@@ -125,7 +126,7 @@ PlasmoidItem {
         // Find the correct tab index before updating visibleTabs
         var targetIndex = 0; // Default fallback
         for (var i = 0; i < newVisibleTabs.length; i++) {
-            if (newVisibleTabs[i].id === root.previousTabId) {
+            if (newVisibleTabs[i].id === root.previousGlobalTabId) {
                 targetIndex = i;
                 break;
             }
@@ -134,10 +135,6 @@ PlasmoidItem {
         // Update tabs and index together
         root.visibleTabs = newVisibleTabs;
         root.currentTabIndex = targetIndex;
-        // Force TabBar to sync its currentIndex
-        if (tabBar && tabBar.currentIndex !== targetIndex) {
-            tabBar.currentIndex = targetIndex;
-        }
 
         root.triggerWidthRecalculation();
     }
@@ -190,10 +187,6 @@ PlasmoidItem {
         // Update tabs and index together
         root.visibleTabs = newVisibleTabs;
         root.currentTabIndex = targetIndex;
-        // Force TabBar to sync its currentIndex
-        if (tabBar && tabBar.currentIndex !== targetIndex) {
-            tabBar.currentIndex = targetIndex;
-        }
 
         root.triggerWidthRecalculation();
     }
@@ -206,11 +199,13 @@ PlasmoidItem {
         itemsPerPage: root.itemsPerPage
 
         onDataUpdated: {
-            // Trigger UI updates when data changes
+            // Just trigger height recalculation - no need to rebuild tabs
             root.triggerWidthRecalculation();
         }
 
-        onErrorOccurred: function (message) {}
+        onErrorOccurred: function (message) {
+            root.triggerWidthRecalculation(); // This also triggers height recalculation
+        }
 
         onWidthRecalculationNeeded: {
             root.triggerWidthRecalculation();
@@ -263,64 +258,111 @@ PlasmoidItem {
         Layout.preferredWidth: optimalWidth
         Layout.preferredHeight: optimalHeight
         Layout.maximumWidth: optimalWidth
+        Layout.maximumHeight: optimalHeight
 
         property int optimalWidth: {
             // Make calculation reactive to data changes
             root.widthTrigger;
 
-            // Base width calculation
-            var baseWidth = Kirigami.Units.gridUnit * 28;
+            // Base width calculation (scaled 1.5x)
+            var baseWidth = Kirigami.Units.gridUnit * 42;
             var calculatedWidth = baseWidth;
 
-            // User profile width
+            // User profile width (scaled 1.5x)
             if (dataManager.userData) {
                 var profileWidth = 0;
                 if (dataManager.userData.name) {
-                    profileWidth = Math.max(profileWidth, dataManager.userData.name.length * 10);
+                    profileWidth = Math.max(profileWidth, dataManager.userData.name.length * 15);
                 }
                 if (dataManager.userData.login) {
-                    profileWidth = Math.max(profileWidth, dataManager.userData.login.length * 10);
+                    profileWidth = Math.max(profileWidth, dataManager.userData.login.length * 15);
                 }
-                profileWidth += 200; // Avatar + stats + margins
+                profileWidth += 300; // Avatar + stats + margins (scaled 1.5x)
                 calculatedWidth = Math.max(calculatedWidth, profileWidth);
             }
 
-            // Tab bar width
-            var tabBarWidth = root.visibleTabs.length * 80 + 40;
+            // Tab bar width (scaled 1.5x)
+            var tabBarWidth = root.visibleTabs.length * 120 + 60;
             calculatedWidth = Math.max(calculatedWidth, tabBarWidth);
 
-            // Content-based width
-            calculatedWidth = Math.max(calculatedWidth, Kirigami.Units.gridUnit * 30);
+            // Content-based width (scaled 1.5x)
+            calculatedWidth = Math.max(calculatedWidth, Kirigami.Units.gridUnit * 45);
 
-            // Apply constraints
+            // Apply constraints (scaled 1.5x)
             var finalWidth = Math.max(baseWidth, calculatedWidth);
-            return Math.min(finalWidth, Kirigami.Units.gridUnit * 50);
+            return Math.min(finalWidth, Kirigami.Units.gridUnit * 75);
         }
 
         property int optimalHeight: {
-            // Dynamic height calculation
-            var headerHeight = 40;
-            var profileCardHeight = 84;
-            var tabBarHeight = 32;
-            var margins = 20;
+            // Trigger recalculation when data changes or context changes
+            root.widthTrigger;
+
+            // Base component heights (scaled 1.5x)
+            var headerHeight = 60;
+            var profileCardHeight = dataManager.userData ? 126 : 0; // Hide if no user data
+            var tabBarHeight = root.inDetailContext ? 0 : 48; // No tabs in detail view
+            var margins = 30; // Top and bottom margins
+            var errorHeight = dataManager.errorMessage !== "" ? 36 : 0;
+            var componentSpacing = 18; // Kirigami.Units.smallSpacing between components (approximately 6px * 3 components)
 
             if (root.inDetailContext) {
-                // Detail view: calculate based on number of timeline items
-                var timelineItems = Math.min(3, dataManager.currentItemComments.length + 1); // +1 for description
-                var timelineHeight = timelineItems * 124 + (timelineItems - 1) * 4; // 120px per card + 4px spacing
-                var issueHeaderHeight = 80; // Title + author + labels
-                var totalHeight = headerHeight + profileCardHeight + issueHeaderHeight + timelineHeight + margins;
-                return Math.max(totalHeight, Kirigami.Units.gridUnit * 20);
+                // Detail view: calculate based on actual timeline items
+                var commentsLength = dataManager.currentItemComments ? dataManager.currentItemComments.length : 0;
+                var actualTimelineItems = commentsLength + 1; // +1 for description
+                var paginatedItems = Math.min(3, actualTimelineItems); // Items shown per page
+                var timelineHeight = paginatedItems * 180 + Math.max(0, paginatedItems - 1) * 9; // 180px per card + 9px spacing between cards
+                var issueHeaderHeight = 120; // Title + author + labels (scaled 1.5x)
+                var paginationHeight = actualTimelineItems > 3 ? 60 : 0; // Only show if needed
+                return Math.max(headerHeight + profileCardHeight + issueHeaderHeight + timelineHeight + paginationHeight + errorHeight + margins + componentSpacing, 200);
             } else {
-                // Normal tab view
-                var contentHeight = root.itemsPerPage * 60 + (root.itemsPerPage - 1) * 2;
-                var paginationHeight = 32;
-                var totalHeight = headerHeight + profileCardHeight + tabBarHeight + contentHeight + paginationHeight + margins;
-                return Math.max(totalHeight, Kirigami.Units.gridUnit * 15);
+                // Normal tab view: calculate based on current context and actual data
+                var currentData = [];
+
+                // Get data based on current context
+                if (root.inRepositoryContext) {
+                    // Repository context
+                    if (root.currentTabIndex === 0) {
+                        currentData = dataManager.repositoryIssuesData || [];
+                    } else {
+                        currentData = dataManager.repositoryPRsData || [];
+                    }
+                } else {
+                    // Global context - check current tab
+                    if (root.currentTabIndex < root.visibleTabs.length && root.visibleTabs[root.currentTabIndex]) {
+                        var tabId = root.visibleTabs[root.currentTabIndex].id;
+                        switch (tabId) {
+                        case "repos":
+                            currentData = dataManager.repositoriesData || [];
+                            break;
+                        case "issues":
+                            currentData = dataManager.issuesData || [];
+                            break;
+                        case "prs":
+                            currentData = dataManager.pullRequestsData || [];
+                            break;
+                        case "orgs":
+                            currentData = dataManager.organizationsData || [];
+                            break;
+                        case "starred":
+                            currentData = dataManager.starredRepositoriesData || [];
+                            break;
+                        default:
+                            currentData = [];
+                        }
+                    }
+                }
+
+                var actualItems = Math.min(root.itemsPerPage, currentData.length);
+                var contentHeight = actualItems * 90 + Math.max(0, actualItems - 1) * 3; // 90px per item + 3px spacing between items
+                var paginationHeight = currentData.length > root.itemsPerPage ? 48 : 0;
+                return Math.max(headerHeight + profileCardHeight + tabBarHeight + contentHeight + paginationHeight + errorHeight + margins + componentSpacing, 200);
             }
         }
 
         Component.onCompleted: {
+            // Initialize visible tabs
+            root.visibleTabs = buildVisibleTabsList();
+
             if (root.githubToken !== "" && root.githubUsername !== "") {
                 if (!dataManager.userData) {
                     dataManager.refreshData();
@@ -340,6 +382,7 @@ PlasmoidItem {
                 // Back button (visible in repository or detail context)
                 PlasmaComponents3.Button {
                     icon.name: "go-previous"
+                    flat: true
                     visible: root.inRepositoryContext || root.inDetailContext
                     onClicked: {
                         if (root.inDetailContext) {
@@ -374,6 +417,7 @@ PlasmoidItem {
 
                 PlasmaComponents3.Button {
                     icon.name: "view-refresh"
+                    flat: true
                     onClicked: {
                         if (root.inRepositoryContext && root.currentRepository) {
                             dataManager.fetchRepositoryIssues(root.currentRepository.full_name, 1);
@@ -405,6 +449,7 @@ PlasmoidItem {
 
                 onCurrentIndexChanged: {
                     root.currentTabIndex = currentIndex;
+                    root.triggerWidthRecalculation(); // This also triggers height recalculation
                 }
 
                 Repeater {
@@ -480,8 +525,9 @@ PlasmoidItem {
                                 }
 
                                 ListView {
+                                    id: listView
                                     boundsBehavior: Flickable.StopAtBounds
-                                    spacing: 2
+                                    spacing: 3
                                     model: {
                                         switch (tabId) {
                                         case "repos":
@@ -524,7 +570,7 @@ PlasmoidItem {
                                             }
                                         }
                                         itemIndex: index
-                                        width: parent.width
+                                        width: parent ? parent.width : 400
                                         onClicked: function (item) {
                                             if (tabId === "repos" || tabId === "starred") {
                                                 // Repository clicked - enter repository context
@@ -711,17 +757,22 @@ PlasmoidItem {
     // Watch for configuration changes and rebuild visible tabs
     onShowRepositoriesTabChanged: {
         root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
     }
     onShowIssuesTabChanged: {
         root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
     }
     onShowPullRequestsTabChanged: {
         root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
     }
     onShowOrganizationsTabChanged: {
         root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
     }
     onShowStarredTabChanged: {
         root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
     }
 }
