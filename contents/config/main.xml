@@ -42,6 +42,46 @@
       <label>Show Starred Repositories tab</label>
       <default>true</default>
     </entry>
+    <entry name="iconTheme" type="Int">
+      <label>GitHub Icon Theme</label>
+      <default>0</default>
+    </entry>
+    <entry name="showIconInTitle" type="Bool">
+      <label>Show icon next to title</label>
+      <default>true</default>
+    </entry>
+    <entry name="showProfileCard" type="Bool">
+      <label>Show profile card</label>
+      <default>true</default>
+    </entry>
+    <entry name="defaultReadmeViewMode" type="Int">
+      <label>Default README view mode</label>
+      <default>2</default>
+    </entry>
+    <entry name="defaultCommentViewMode" type="Int">
+      <label>Default comment view mode</label>
+      <default>1</default>
+    </entry>
+    <entry name="showUserAvatars" type="Bool">
+      <label>Show user avatars</label>
+      <default>true</default>
+    </entry>
+    <entry name="showOrgAvatars" type="Bool">
+      <label>Show organization avatars</label>
+      <default>true</default>
+    </entry>
+    <entry name="showRepoAvatars" type="Bool">
+      <label>Show repository owner avatars</label>
+      <default>true</default>
+    </entry>
+    <entry name="showIssueAvatars" type="Bool">
+      <label>Show issue author avatars</label>
+      <default>true</default>
+    </entry>
+    <entry name="showPRAvatars" type="Bool">
+      <label>Show PR author avatars</label>
+      <default>true</default>
+    </entry>
   </group>
 
 </kcfg>

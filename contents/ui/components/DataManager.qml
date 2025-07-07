@@ -31,6 +31,11 @@ Item {
     property string errorMessage: ""
     property int totalStars: 0
     property bool calculatingStars: false
+    // Track which tabs have been loaded
+    property var loadedTabs: ({
+    })
+    property var loadedRepoTabs: ({
+    })
     // Pagination properties
     property int currentRepoPage: 1
     property int currentIssuePage: 1
@@ -106,18 +111,22 @@ Item {
         }
         isLoading = true;
         errorMessage = "";
-        // If force refresh, invalidate all caches
+        // If force refresh, invalidate all caches and loaded tabs
         if (forceRefresh) {
             userDataCache.timestamp = 0;
             totalStarsCache.timestamp = 0;
             organizationsCache.timestamp = 0;
+            loadedTabs = {
+            };
+            loadedRepoTabs = {
+            };
         }
         // Check if user data is cached and valid
         if (!forceRefresh && isCacheValid(userDataCache)) {
             userData = userDataCache.data;
             totalRepos = userData.public_repos || 0;
             widthRecalculationNeeded();
-            fetchRepositories(1);
+            isLoading = false;
             return ;
         }
         // Fetch user data
@@ -133,9 +142,9 @@ Item {
             widthRecalculationNeeded();
             // Cache the user data
             updateCache(userDataCache, data);
-            // Calculate total stars and fetch repositories
+            // Calculate total stars but don't auto-load any tab data
             calculateTotalStars();
-            fetchRepositories(1);
+            isLoading = false;
         });
     }
 
@@ -150,10 +159,8 @@ Item {
             repositoriesData = data;
             hasMoreRepos = data.length === itemsPerPage;
             currentRepoPage = page;
+            loadedTabs["repos"] = true;
             widthRecalculationNeeded();
-            if (page === 1)
-                fetchIssues(1);
-
             dataUpdated();
         });
     }
@@ -171,10 +178,8 @@ Item {
             issuesData = issues;
             hasMoreIssues = issues.length === itemsPerPage;
             currentIssuePage = page;
+            loadedTabs["issues"] = true;
             widthRecalculationNeeded();
-            if (page === 1)
-                fetchPullRequests(1);
-
             dataUpdated();
         });
     }
@@ -192,10 +197,8 @@ Item {
             pullRequestsData = prs;
             hasMorePRs = prs.length === itemsPerPage;
             currentPRPage = page;
+            loadedTabs["prs"] = true;
             widthRecalculationNeeded();
-            if (page === 1)
-                fetchOrganizations(1);
-
             dataUpdated();
         });
     }
@@ -211,11 +214,8 @@ Item {
                 organizationsData = data;
                 hasMoreOrgs = data.length === itemsPerPage;
                 currentOrgPage = page;
+                loadedTabs["orgs"] = true;
                 widthRecalculationNeeded();
-            }
-            if (page === 1) {
-                fetchStarredRepositories(1);
-                isLoading = false;
             }
             dataUpdated();
         });
@@ -231,6 +231,7 @@ Item {
             starredRepositoriesData = data;
             hasMoreStarred = data.length === itemsPerPage;
             currentStarredPage = page;
+            loadedTabs["starred"] = true;
             widthRecalculationNeeded();
             // For starred repos, use cached total count
             if (page === 1) {
@@ -286,6 +287,18 @@ Item {
             fetchStarredRepositories(page);
             break;
         }
+    }
+
+    // Lazy loading function - only fetch if not already loaded
+    function ensureTabDataLoaded(tabType) {
+        if (!loadedTabs[tabType])
+            fetchDataForTab(tabType, 1);
+
+    }
+
+    // Check if tab data is loaded
+    function isTabDataLoaded(tabType) {
+        return loadedTabs[tabType] === true;
     }
 
     // Getters for tab data
@@ -371,6 +384,7 @@ Item {
             repositoryIssuesData = data;
             hasMoreRepoIssues = data.length === itemsPerPage;
             currentRepoIssuesPage = page;
+            loadedRepoTabs[repoFullName + "-issues"] = true;
             // Estimate total count based on pagination
             if (page === 1) {
                 if (data.length < itemsPerPage)
@@ -398,6 +412,7 @@ Item {
             repositoryPRsData = data;
             hasMoreRepoPRs = data.length === itemsPerPage;
             currentRepoPRsPage = page;
+            loadedRepoTabs[repoFullName + "-prs"] = true;
             // Estimate total count based on pagination
             if (page === 1) {
                 if (data.length < itemsPerPage)
@@ -426,9 +441,33 @@ Item {
                 console.log("README fetched successfully:", data.name || "README");
                 repositoryReadmeData = data;
             }
+            loadedRepoTabs[repoFullName + "-readme"] = true;
             dataUpdated();
             widthRecalculationNeeded(); // Trigger tab rebuilding
         });
+    }
+
+    // Repository tab lazy loading functions
+    function ensureRepoTabDataLoaded(repoFullName, tabType) {
+        var tabKey = repoFullName + "-" + tabType;
+        if (!loadedRepoTabs[tabKey]) {
+            switch (tabType) {
+            case "readme":
+                fetchRepositoryReadme(repoFullName);
+                break;
+            case "issues":
+                fetchRepositoryIssues(repoFullName, 1);
+                break;
+            case "prs":
+                fetchRepositoryPRs(repoFullName, 1);
+                break;
+            }
+        }
+    }
+
+    function isRepoTabDataLoaded(repoFullName, tabType) {
+        var tabKey = repoFullName + "-" + tabType;
+        return loadedRepoTabs[tabKey] === true;
     }
 
     // Detailed data fetching
@@ -436,6 +475,8 @@ Item {
         var repoPath = repoFullName.split('/');
         var owner = repoPath[0];
         var repo = repoPath[1];
+        // Clear previous comments when fetching new issue
+        currentItemComments = [];
         githubClient.getIssueDetails(owner, repo, issueNumber, function(data, error) {
             if (error) {
                 errorMessage = "Failed to fetch issue details: " + error.message;
@@ -444,8 +485,8 @@ Item {
             }
             currentIssueDetail = data;
             dataUpdated();
-            // Also fetch comments
-            fetchItemComments(repoFullName, issueNumber, false);
+            // Only fetch first page of comments initially (lazy loading)
+            fetchItemComments(repoFullName, issueNumber, false, 1);
         });
     }
 
@@ -453,6 +494,8 @@ Item {
         var repoPath = repoFullName.split('/');
         var owner = repoPath[0];
         var repo = repoPath[1];
+        // Clear previous comments when fetching new PR
+        currentItemComments = [];
         githubClient.getPullRequestDetails(owner, repo, prNumber, function(data, error) {
             if (error) {
                 errorMessage = "Failed to fetch PR details: " + error.message;
@@ -461,12 +504,12 @@ Item {
             }
             currentPRDetail = data;
             dataUpdated();
-            // Also fetch comments
-            fetchItemComments(repoFullName, prNumber, true);
+            // Only fetch first page of comments initially (lazy loading)
+            fetchItemComments(repoFullName, prNumber, true, 1);
         });
     }
 
-    function fetchItemComments(repoFullName, itemNumber, isPR) {
+    function fetchItemComments(repoFullName, itemNumber, isPR, page = 1) {
         var repoPath = repoFullName.split('/');
         var owner = repoPath[0];
         var repo = repoPath[1];
@@ -474,15 +517,27 @@ Item {
             if (error) {
                 errorMessage = "Failed to fetch comments: " + error.message;
                 errorOccurred(errorMessage);
+                // Comment fetch error logged
                 return ;
             }
-            currentItemComments = data;
+            // For paginated loading, append new comments to existing ones
+            if (page === 1) {
+                currentItemComments = data || [];
+            } else {
+                var existingComments = currentItemComments || [];
+                currentItemComments = existingComments.concat(data || []);
+            }
             dataUpdated();
         };
         if (isPR)
-            githubClient.getPullRequestComments(owner, repo, itemNumber, commentCallback);
+            githubClient.getPullRequestComments(owner, repo, itemNumber, commentCallback, page, 30);
         else
-            githubClient.getIssueComments(owner, repo, itemNumber, commentCallback);
+            githubClient.getIssueComments(owner, repo, itemNumber, commentCallback, page, 30);
+    }
+
+    // Function to load more comments for timeline pagination
+    function loadMoreComments(repoFullName, itemNumber, isPR, nextPage) {
+        fetchItemComments(repoFullName, itemNumber, isPR, nextPage);
     }
 
     Component.onCompleted: {

@@ -6,6 +6,9 @@ import org.kde.kirigami 2.20 as Kirigami
 import org.kde.plasma.components 3.0 as PlasmaComponents3
 
 ColumnLayout {
+    // Fallback: assume more if we have exactly commentsPerPage items
+    // Component ready
+
     id: detailView
 
     property var itemData: null
@@ -14,9 +17,15 @@ ColumnLayout {
     property bool isLoading: false
     property var repositoryInfo: null
     property string defaultCommentViewMode: "markdown"
+    property bool showUserAvatars: true
+    property bool showIssueAvatars: true
+    property bool showPRAvatars: true
+    property var dataManagerInstance: null
     property var timelineData: []
     property int currentPage: 1
     property int commentsPerPage: 3
+    property int totalCommentsLoaded: 0
+    property bool hasMoreCommentsToLoad: false
     property var paginatedTimelineData: {
         var totalItems = timelineData.length;
         var totalPages = Math.ceil(totalItems / commentsPerPage);
@@ -103,19 +112,38 @@ ColumnLayout {
             }
         }
         timelineData = timeline;
+        totalCommentsLoaded = commentsData ? commentsData.length : 0;
+        // Estimate if there are more comments to load based on item metadata
+        if (itemData && itemData.comments !== undefined)
+            hasMoreCommentsToLoad = totalCommentsLoaded < itemData.comments;
+        else
+            hasMoreCommentsToLoad = totalCommentsLoaded > 0 && (totalCommentsLoaded % 30 === 0);
         currentPage = 1; // Reset to first page when data changes
     }
 
     function nextPage() {
-        if (paginatedTimelineData.hasNext)
+        if (paginatedTimelineData.hasNext) {
             currentPage++;
+            // If we're near the end of loaded comments and more are available, load more
+            var currentEndIndex = currentPage * commentsPerPage;
+            var totalTimelineItems = timelineData.length;
+            if (hasMoreCommentsToLoad && currentEndIndex >= totalTimelineItems - 5)
+                loadMoreComments();
 
+        }
     }
 
     function previousPage() {
         if (paginatedTimelineData.hasPrevious)
             currentPage--;
 
+    }
+
+    function loadMoreComments() {
+        if (hasMoreCommentsToLoad && repositoryInfo && itemData && dataManagerInstance) {
+            var nextCommentPage = Math.floor(totalCommentsLoaded / 30) + 1;
+            dataManagerInstance.loadMoreComments(repositoryInfo.full_name, itemData.number, !!itemData.pull_request, nextCommentPage);
+        }
     }
 
     spacing: 0
@@ -259,11 +287,24 @@ ColumnLayout {
                                 radius: 15
                                 color: "transparent"
 
-                                Image {
+                                CachedImage {
                                     anchors.fill: parent
-                                    source: modelData.author ? modelData.author.avatar_url : ""
+                                    originalSource: {
+                                        if (!modelData.author)
+                                            return "";
+
+                                        // Both issue/PR description AND all comments use user avatar setting only
+                                        return showUserAvatars ? modelData.author.avatar_url : "";
+                                    }
                                     fillMode: Image.PreserveAspectCrop
                                     smooth: true
+                                    visible: {
+                                        if (!modelData.author || !modelData.author.avatar_url)
+                                            return false;
+
+                                        // Both issue/PR description AND all comments use user avatar setting only
+                                        return showUserAvatars;
+                                    }
 
                                     Rectangle {
                                         anchors.fill: parent
@@ -273,6 +314,18 @@ ColumnLayout {
                                         border.color: Qt.rgba(0, 0, 0, 0.1)
                                     }
 
+                                }
+
+                                Kirigami.Icon {
+                                    anchors.fill: parent
+                                    source: "user-identity"
+                                    visible: {
+                                        if (!modelData.author || !modelData.author.avatar_url)
+                                            return true;
+
+                                        // Both issue/PR description AND all comments use user avatar setting only
+                                        return !showUserAvatars;
+                                    }
                                 }
 
                             }

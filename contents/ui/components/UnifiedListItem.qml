@@ -10,6 +10,11 @@ Rectangle {
     property var itemData: null
     property string itemType: "repo" // "repo", "issue", "pr", "org"
     property int itemIndex: 0
+    property bool showUserAvatars: true
+    property bool showOrgAvatars: true
+    property bool showRepoAvatars: true
+    property bool showIssueAvatars: true
+    property bool showPRAvatars: true
 
     signal clicked(var item)
 
@@ -66,6 +71,21 @@ Rectangle {
         }
     }
 
+    function shouldShowAvatar() {
+        switch (itemType) {
+        case "org":
+            return showOrgAvatars;
+        case "repo":
+            return showRepoAvatars;
+        case "issue":
+            return showIssueAvatars;
+        case "pr":
+            return showPRAvatars;
+        default:
+            return false;
+        }
+    }
+
     Layout.fillWidth: true
     height: 90
     color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : "transparent"
@@ -93,14 +113,14 @@ Rectangle {
             radius: itemType === "org" ? 18 : 0
             color: "transparent"
 
-            Image {
+            CachedImage {
                 id: itemImage
 
                 anchors.fill: parent
-                source: getItemImageUrl()
+                originalSource: shouldShowAvatar() ? getItemImageUrl() : ""
                 fillMode: Image.PreserveAspectCrop
                 smooth: true
-                visible: getItemImageUrl() !== ""
+                visible: shouldShowAvatar() && getItemImageUrl() !== ""
 
                 Rectangle {
                     anchors.fill: parent
@@ -128,7 +148,7 @@ Rectangle {
                         return "document";
                     }
                 }
-                visible: getItemImageUrl() === ""
+                visible: !shouldShowAvatar() || getItemImageUrl() === ""
             }
 
         }

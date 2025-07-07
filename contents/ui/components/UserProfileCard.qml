@@ -9,6 +9,7 @@ Rectangle {
     property var userData: null
     property int repositoryCount: 0
     property int totalStars: 0
+    property bool showUserAvatars: true
 
     Layout.fillWidth: true
     Layout.preferredHeight: userInfo.implicitHeight + 30
@@ -31,11 +32,12 @@ Rectangle {
             color: "transparent"
             border.width: 0
 
-            Image {
+            CachedImage {
                 anchors.fill: parent
-                source: userData ? userData.avatar_url : ""
+                originalSource: showUserAvatars && userData ? userData.avatar_url : ""
                 fillMode: Image.PreserveAspectCrop
                 smooth: true
+                visible: showUserAvatars && userData && userData.avatar_url
 
                 Rectangle {
                     anchors.fill: parent
@@ -52,7 +54,7 @@ Rectangle {
                 width: 48
                 height: 48
                 source: "user-identity"
-                visible: !userData || !userData.avatar_url
+                visible: !showUserAvatars || !userData || !userData.avatar_url
                 opacity: 0.5
             }
 

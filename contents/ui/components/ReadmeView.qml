@@ -244,6 +244,8 @@ Item {
                 font.family: Kirigami.Theme.defaultFont.family
                 font.pixelSize: 12
                 padding: 8
+                // Prevent local file resolution
+                baseUrl: repositoryInfo ? "https://raw.githubusercontent.com/" + repositoryInfo.full_name + "/main/" : ""
 
                 background: Rectangle {
                     color: "transparent"
@@ -292,6 +294,8 @@ Item {
                 font.family: Kirigami.Theme.defaultFont.family
                 font.pixelSize: 12
                 padding: 8
+                // Prevent local file resolution
+                baseUrl: repositoryInfo ? "https://raw.githubusercontent.com/" + repositoryInfo.full_name + "/main/" : ""
 
                 background: Rectangle {
                     color: "transparent"

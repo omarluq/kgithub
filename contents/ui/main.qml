@@ -24,6 +24,11 @@ PlasmoidItem {
     readonly property bool showProfileCard: plasmoid.configuration.showProfileCard !== undefined ? plasmoid.configuration.showProfileCard : true
     readonly property int defaultReadmeViewMode: plasmoid.configuration.defaultReadmeViewMode !== undefined ? plasmoid.configuration.defaultReadmeViewMode : 2
     readonly property int defaultCommentViewMode: plasmoid.configuration.defaultCommentViewMode !== undefined ? plasmoid.configuration.defaultCommentViewMode : 1
+    readonly property bool showUserAvatars: plasmoid.configuration.showUserAvatars !== undefined ? plasmoid.configuration.showUserAvatars : true
+    readonly property bool showOrgAvatars: plasmoid.configuration.showOrgAvatars !== undefined ? plasmoid.configuration.showOrgAvatars : true
+    readonly property bool showRepoAvatars: plasmoid.configuration.showRepoAvatars !== undefined ? plasmoid.configuration.showRepoAvatars : true
+    readonly property bool showIssueAvatars: plasmoid.configuration.showIssueAvatars !== undefined ? plasmoid.configuration.showIssueAvatars : true
+    readonly property bool showPRAvatars: plasmoid.configuration.showPRAvatars !== undefined ? plasmoid.configuration.showPRAvatars : true
 
     // Navigation context modes
     property bool inRepositoryContext: false
@@ -43,14 +48,13 @@ PlasmoidItem {
             // In detail context, no tabs needed - single view
             return tabs;
         } else if (root.inRepositoryContext) {
-            // In repository context, show README (if available), Issues and PRs tabs
-            if (dataManager.repositoryReadmeData) {
-                tabs.push({
-                    id: "repo-readme",
-                    name: "README",
-                    data: dataManager.repositoryReadmeData
-                });
-            }
+            // In repository context, show README, Issues and PRs tabs
+            // Always show README tab - data will be loaded lazily
+            tabs.push({
+                id: "repo-readme",
+                name: "README",
+                data: dataManager.repositoryReadmeData
+            });
             tabs.push({
                 id: "repo-issues",
                 name: "Issues",
@@ -121,10 +125,17 @@ PlasmoidItem {
         // Update tab structure
         root.visibleTabs = buildVisibleTabsList();
 
-        // Fetch repository-specific data
-        dataManager.fetchRepositoryReadme(repository.full_name);
-        dataManager.fetchRepositoryIssues(repository.full_name, 1);
-        dataManager.fetchRepositoryPRs(repository.full_name, 1);
+        // Only fetch data for the first visible tab (lazy loading)
+        if (root.visibleTabs.length > 0) {
+            var firstTabId = root.visibleTabs[0].id;
+            if (firstTabId === "repo-readme") {
+                dataManager.ensureRepoTabDataLoaded(repository.full_name, "readme");
+            } else if (firstTabId === "repo-issues") {
+                dataManager.ensureRepoTabDataLoaded(repository.full_name, "issues");
+            } else if (firstTabId === "repo-prs") {
+                dataManager.ensureRepoTabDataLoaded(repository.full_name, "prs");
+            }
+        }
 
         root.triggerWidthRecalculation();
     }
@@ -383,8 +394,7 @@ PlasmoidItem {
                 }
 
                 // Special handling for README tab
-                if (root.inRepositoryContext && root.currentTabIndex < root.visibleTabs.length &&
-                    root.visibleTabs[root.currentTabIndex] && root.visibleTabs[root.currentTabIndex].id === "repo-readme") {
+                if (root.inRepositoryContext && root.currentTabIndex < root.visibleTabs.length && root.visibleTabs[root.currentTabIndex] && root.visibleTabs[root.currentTabIndex].id === "repo-readme") {
                     // Fixed height for README tab
                     var readmeHeight = 400; // Fixed reasonable height for README content
                     return Math.max(headerHeight + profileCardHeight + tabBarHeight + readmeHeight + errorHeight + margins + componentSpacing, 200);
@@ -404,6 +414,22 @@ PlasmoidItem {
             if (root.githubToken !== "" && root.githubUsername !== "") {
                 if (!dataManager.userData) {
                     dataManager.refreshData();
+                }
+
+                // Lazy load data for the initial tab
+                if (root.visibleTabs.length > 0) {
+                    var initialTabId = root.visibleTabs[0].id;
+                    if (initialTabId === "repos") {
+                        dataManager.ensureTabDataLoaded("repos");
+                    } else if (initialTabId === "issues") {
+                        dataManager.ensureTabDataLoaded("issues");
+                    } else if (initialTabId === "prs") {
+                        dataManager.ensureTabDataLoaded("prs");
+                    } else if (initialTabId === "orgs") {
+                        dataManager.ensureTabDataLoaded("orgs");
+                    } else if (initialTabId === "starred") {
+                        dataManager.ensureTabDataLoaded("starred");
+                    }
                 }
             }
         }
@@ -500,6 +526,7 @@ PlasmoidItem {
                 userData: dataManager.userData
                 repositoryCount: dataManager.totalRepos
                 totalStars: dataManager.totalStars
+                showUserAvatars: root.showUserAvatars
                 visible: root.showProfileCard
             }
 
@@ -513,6 +540,37 @@ PlasmoidItem {
 
                 onCurrentIndexChanged: {
                     root.currentTabIndex = currentIndex;
+
+                    // Lazy load data for the newly selected tab
+                    if (currentIndex >= 0 && currentIndex < root.visibleTabs.length && root.visibleTabs[currentIndex]) {
+                        var tabData = root.visibleTabs[currentIndex];
+                        var tabId = tabData && tabData.id ? tabData.id : "";
+
+                        if (tabId && root.inRepositoryContext && root.currentRepository) {
+                            // Repository context - load specific repo tab data
+                            if (tabId === "repo-readme") {
+                                dataManager.ensureRepoTabDataLoaded(root.currentRepository.full_name, "readme");
+                            } else if (tabId === "repo-issues") {
+                                dataManager.ensureRepoTabDataLoaded(root.currentRepository.full_name, "issues");
+                            } else if (tabId === "repo-prs") {
+                                dataManager.ensureRepoTabDataLoaded(root.currentRepository.full_name, "prs");
+                            }
+                        } else if (tabId) {
+                            // Global context - load global tab data
+                            if (tabId === "repos") {
+                                dataManager.ensureTabDataLoaded("repos");
+                            } else if (tabId === "issues") {
+                                dataManager.ensureTabDataLoaded("issues");
+                            } else if (tabId === "prs") {
+                                dataManager.ensureTabDataLoaded("prs");
+                            } else if (tabId === "orgs") {
+                                dataManager.ensureTabDataLoaded("orgs");
+                            } else if (tabId === "starred") {
+                                dataManager.ensureTabDataLoaded("starred");
+                            }
+                        }
+                    }
+
                     root.triggerWidthRecalculation(); // This also triggers height recalculation
                 }
 
@@ -541,11 +599,18 @@ PlasmoidItem {
                     commentsData: dataManager.currentItemComments
                     isLoading: dataManager.isLoading
                     repositoryInfo: root.currentRepository
+                    showUserAvatars: root.showUserAvatars
+                    showIssueAvatars: root.showIssueAvatars
+                    showPRAvatars: root.showPRAvatars
+                    dataManagerInstance: dataManager
                     defaultCommentViewMode: {
                         switch (root.defaultCommentViewMode) {
-                        case 0: return "raw";
-                        case 1: return "markdown";
-                        default: return "markdown";
+                        case 0:
+                            return "raw";
+                        case 1:
+                            return "markdown";
+                        default:
+                            return "markdown";
                         }
                     }
                 }
@@ -572,10 +637,14 @@ PlasmoidItem {
                                 visible: tabId === "repo-readme"
                                 defaultViewMode: {
                                     switch (root.defaultReadmeViewMode) {
-                                    case 0: return "raw";
-                                    case 1: return "markdown";
-                                    case 2: return "rich";
-                                    default: return "rich";
+                                    case 0:
+                                        return "raw";
+                                    case 1:
+                                        return "markdown";
+                                    case 2:
+                                        return "rich";
+                                    default:
+                                        return "rich";
                                     }
                                 }
                             }
@@ -641,6 +710,11 @@ PlasmoidItem {
 
                                     delegate: Components.UnifiedListItem {
                                         itemData: modelData
+                                        showUserAvatars: root.showUserAvatars
+                                        showOrgAvatars: root.showOrgAvatars
+                                        showRepoAvatars: root.showRepoAvatars
+                                        showIssueAvatars: root.showIssueAvatars
+                                        showPRAvatars: root.showPRAvatars
                                         itemType: {
                                             switch (tabId) {
                                             case "repos":
