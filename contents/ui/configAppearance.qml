@@ -18,6 +18,7 @@ ColumnLayout {
     property alias cfg_showPullRequestsTab: showPullRequestsCheckBox.checked
     property alias cfg_showOrganizationsTab: showOrganizationsCheckBox.checked
     property alias cfg_showStarredTab: showStarredCheckBox.checked
+    property alias cfg_defaultReadmeViewMode: defaultReadmeViewModeComboBox.currentIndex
 
     property int cfg_iconThemeDefault: 0
     property bool cfg_showIconInTitleDefault: true
@@ -28,6 +29,7 @@ ColumnLayout {
     property bool cfg_showPullRequestsTabDefault: true
     property bool cfg_showOrganizationsTabDefault: true
     property bool cfg_showStarredTabDefault: true
+    property int cfg_defaultReadmeViewModeDefault: 2
 
     Kirigami.FormLayout {
         Layout.fillWidth: true
@@ -90,6 +92,14 @@ ColumnLayout {
             from: 3
             to: 20
             value: 5
+        }
+
+        PlasmaComponents3.ComboBox {
+            id: defaultReadmeViewModeComboBox
+            Kirigami.FormData.label: "Default README view mode:"
+            model: ["Raw", "Markdown", "Rich"]
+            currentIndex: 2
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 8
         }
 
         Item {
