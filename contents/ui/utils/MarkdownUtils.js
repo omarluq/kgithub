@@ -8,10 +8,12 @@ function processRelativeUrls(content, repositoryInfo) {
     var baseUrl = "https://github.com/" + repositoryInfo.full_name;
     var rawBaseUrl = "https://raw.githubusercontent.com/" + repositoryInfo.full_name + "/main";
 
-    // Process markdown images: ![alt](./path) or ![alt](path)
-    content = content.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, function(match, alt, path) {
-        var cleanPath = path.replace(/^\.\//, "");
-        return "![" + alt + "](" + rawBaseUrl + "/" + cleanPath + ")";
+    // Process markdown images: ![alt](./path) or ![alt](path) - handle all relative paths
+    content = content.replace(/!\[([^\]]*)\]\((?!https?:\/\/|data:)([^)]+)\)/g, function(match, alt, path) {
+        // Remove leading ./ and / and handle various relative path formats
+        var cleanPath = path.replace(/^\.\//, "").replace(/^\//, "");
+        var imageUrl = rawBaseUrl + "/" + cleanPath;
+        return "![" + alt + "](" + imageUrl + ")";
     });
 
     // Process markdown links to files: [text](./path) or [text](path)
@@ -30,9 +32,10 @@ function processRelativeUrls(content, repositoryInfo) {
     });
 
     // Process HTML img tags: <img src="./path"> or <img src="path">
-    content = content.replace(/<img([^>]*)\ssrc=["'](?!https?:\/\/)([^"']+)["']([^>]*)>/g, function(match, before, path, after) {
-        var cleanPath = path.replace(/^\.\//, "");
-        return "<img" + before + ' src="' + rawBaseUrl + "/" + cleanPath + '"' + after + ">";
+    content = content.replace(/<img([^>]*)\ssrc=["'](?!https?:\/\/|data:)([^"']+)["']([^>]*)>/g, function(match, before, path, after) {
+        var cleanPath = path.replace(/^\.\//, "").replace(/^\//, "");
+        var imageUrl = rawBaseUrl + "/" + cleanPath;
+        return "<img" + before + ' src="' + imageUrl + '"' + after + ">";
     });
 
     return content;

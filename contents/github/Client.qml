@@ -233,15 +233,17 @@ QtObject {
         makeRequest(url, callback);
     }
 
-    function getIssueComments(owner, repo, issueNumber, callback) {
+    function getIssueComments(owner, repo, issueNumber, callback, page = 1, perPage = 30) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber + "/comments";
         url += "?sort=created&direction=asc";
+        url += "&page=" + page + "&per_page=" + perPage;
         makeRequest(url, callback);
     }
 
-    function getPullRequestComments(owner, repo, prNumber, callback) {
+    function getPullRequestComments(owner, repo, prNumber, callback, page = 1, perPage = 30) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + prNumber + "/comments";
         url += "?sort=created&direction=asc";
+        url += "&page=" + page + "&per_page=" + perPage;
         makeRequest(url, callback);
     }
 
