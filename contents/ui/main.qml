@@ -33,6 +33,12 @@ PlasmoidItem {
     readonly property bool showPRAvatars: plasmoid.configuration.showPRAvatars !== undefined ? plasmoid.configuration.showPRAvatars : true
     readonly property bool showProfileReadmeTab: plasmoid.configuration.showProfileReadmeTab !== undefined ? plasmoid.configuration.showProfileReadmeTab : true
 
+    // Watch for configuration changes and rebuild tabs
+    onShowProfileReadmeTabChanged: {
+        root.visibleTabs = buildVisibleTabsList();
+        root.triggerWidthRecalculation();
+    }
+
     // Navigation context modes
     property bool inRepositoryContext: false
     property bool inDetailContext: false
@@ -418,7 +424,6 @@ PlasmoidItem {
                     }
                 }
 
-
                 var actualItems = Math.min(root.itemsPerPage, currentData.length);
                 var contentHeight = actualItems * 90 + Math.max(0, actualItems - 1) * 3; // 90px per item + 3px spacing between items
                 var paginationHeight = currentData.length > root.itemsPerPage ? 48 : 0;
@@ -439,9 +444,9 @@ PlasmoidItem {
                 // Lazy load data for the initial tab
                 if (root.visibleTabs.length > 0) {
                     var initialTabId = root.visibleTabs[0].id;
-                    if (initialTabId === "profile-readme") {
-                        // Profile README is already fetched with user data
-                    } else if (initialTabId === "repos") {
+                    if (initialTabId === "profile-readme")
+                    // Profile README is already fetched with user data
+                    {} else if (initialTabId === "repos") {
                         dataManager.ensureTabDataLoaded("repos");
                     } else if (initialTabId === "issues") {
                         dataManager.ensureTabDataLoaded("issues");

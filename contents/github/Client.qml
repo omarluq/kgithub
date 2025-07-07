@@ -533,7 +533,9 @@ QtObject {
             data: activityData,
             maxCommits: maxCommits,
             totalDays: activityData.length,
-            totalCommits: Object.values(commitsByDate).reduce(function(a, b) { return a + b; }, 0)
+            totalCommits: Object.values(commitsByDate).reduce(function (a, b) {
+                return a + b;
+            }, 0)
         };
     }
 
