@@ -22,6 +22,7 @@ PlasmoidItem {
     readonly property int iconTheme: plasmoid.configuration.iconTheme !== undefined ? plasmoid.configuration.iconTheme : 0
     readonly property bool showIconInTitle: plasmoid.configuration.showIconInTitle !== undefined ? plasmoid.configuration.showIconInTitle : true
     readonly property bool showProfileCard: plasmoid.configuration.showProfileCard !== undefined ? plasmoid.configuration.showProfileCard : true
+    readonly property int defaultReadmeViewMode: plasmoid.configuration.defaultReadmeViewMode !== undefined ? plasmoid.configuration.defaultReadmeViewMode : 2
 
     // Navigation context modes
     property bool inRepositoryContext: false
@@ -559,6 +560,14 @@ PlasmoidItem {
                                 Layout.fillHeight: true
                                 readmeData: dataManager.repositoryReadmeData
                                 visible: tabId === "repo-readme"
+                                defaultViewMode: {
+                                    switch (root.defaultReadmeViewMode) {
+                                    case 0: return "raw";
+                                    case 1: return "markdown";
+                                    case 2: return "rich";
+                                    default: return "rich";
+                                    }
+                                }
                             }
 
                             ScrollView {

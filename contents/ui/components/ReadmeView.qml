@@ -8,6 +8,8 @@ Item {
     id: readmeView
 
     property var readmeData: null
+    property string defaultViewMode: "rich" // "raw", "markdown", "rich"
+    property string viewMode: defaultViewMode
 
     ColumnLayout {
         anchors.fill: parent
@@ -30,6 +32,58 @@ Item {
                 Layout.fillWidth: true
             }
 
+            // View mode selector
+            PlasmaComponents3.Button {
+                id: viewModeButton
+
+                visible: readmeData
+                icon.name: "view-visible"
+                text: {
+                    switch (viewMode) {
+                    case "raw":
+                        return "Raw";
+                    case "markdown":
+                        return "Markdown";
+                    case "rich":
+                        return "Rich";
+                    default:
+                        return "Rich";
+                    }
+                }
+                flat: true
+                onClicked: viewModeMenu.opened ? viewModeMenu.close() : viewModeMenu.popup(viewModeButton, 0, viewModeButton.height)
+
+                PlasmaComponents3.Menu {
+                    id: viewModeMenu
+
+                    PlasmaComponents3.MenuItem {
+                        text: "Raw"
+                        icon.name: "text-plain"
+                        checkable: true
+                        checked: viewMode === "raw"
+                        onTriggered: viewMode = "raw"
+                    }
+
+                    PlasmaComponents3.MenuItem {
+                        text: "Markdown"
+                        icon.name: "text-markdown"
+                        checkable: true
+                        checked: viewMode === "markdown"
+                        onTriggered: viewMode = "markdown"
+                    }
+
+                    PlasmaComponents3.MenuItem {
+                        text: "Rich"
+                        icon.name: "text-enriched"
+                        checkable: true
+                        checked: viewMode === "rich"
+                        onTriggered: viewMode = "rich"
+                    }
+
+                }
+
+            }
+
             // Hamburger menu button
             PlasmaComponents3.Button {
                 id: menuButton
@@ -46,7 +100,7 @@ Item {
                     id: contextMenu
 
                     PlasmaComponents3.MenuItem {
-                        text: "View Raw"
+                        text: "View Raw on GitHub"
                         icon.name: "text-plain"
                         enabled: readmeData && readmeData.download_url
                         opacity: 1
@@ -130,15 +184,17 @@ Item {
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
+            // Raw view - pure text, no interpretation
             PlasmaComponents3.TextArea {
-                id: contentText
+                id: rawContentText
 
+                visible: viewMode === "raw"
                 text: {
                     if (!readmeData || !readmeData.content)
                         return "No README content available";
 
                     try {
-                        // Decode base64 content
+                        // Return the exact raw content
                         return Qt.atob(readmeData.content);
                     } catch (e) {
                         return "Error decoding README content";
@@ -154,6 +210,76 @@ Item {
 
                 background: Rectangle {
                     color: Qt.rgba(0, 0, 0, 0.03)
+                    radius: 3
+                }
+
+            }
+
+            // Markdown view
+            PlasmaComponents3.TextArea {
+                id: markdownContentText
+
+                visible: viewMode === "markdown"
+                text: {
+                    if (!readmeData || !readmeData.content)
+                        return "No README content available";
+
+                    try {
+                        // Return raw content for Qt's markdown parser
+                        return Qt.atob(readmeData.content);
+                    } catch (e) {
+                        return "Error decoding README content";
+                    }
+                }
+                wrapMode: Text.Wrap
+                textFormat: Text.MarkdownText
+                selectByMouse: true
+                readOnly: true
+                font.family: Kirigami.Theme.defaultFont.family
+                font.pixelSize: 12
+                padding: 8
+
+                background: Rectangle {
+                    color: "transparent"
+                    radius: 3
+                }
+
+            }
+
+            // Rich view - convert markdown to HTML
+            PlasmaComponents3.TextArea {
+                // Convert headers
+                // Convert bold and italic
+                // Convert inline code
+                // Convert links
+                // Convert line breaks
+
+                id: richContentText
+
+                visible: viewMode === "rich"
+                text: {
+                    if (!readmeData || !readmeData.content)
+                        return "No README content available";
+
+                    try {
+                        // Convert markdown to HTML for rich text display
+                        var rawContent = Qt.atob(readmeData.content);
+                        var htmlContent = rawContent.replace(/^### (.+)$/gm, "<h3>$1</h3>").replace(/^## (.+)$/gm, "<h2>$1</h2>").replace(/^# (.+)$/gm, "<h1>$1</h1>").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>').replace(/\n/g, "<br>");
+                        return htmlContent;
+                    } catch (e) {
+                        return "Error decoding README content";
+                    }
+                }
+                wrapMode: Text.Wrap
+                textFormat: Text.RichText
+                selectByMouse: true
+                readOnly: true
+                font.family: Kirigami.Theme.defaultFont.family
+                font.pixelSize: 12
+                padding: 8
+
+                background: Rectangle {
+                    color: "transparent"
                     radius: 3
                 }
 
