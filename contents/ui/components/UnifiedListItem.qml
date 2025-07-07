@@ -18,6 +18,24 @@ Rectangle {
 
     signal clicked(var item)
 
+    function getItemUrl() {
+        if (!itemData)
+            return "";
+
+        switch (itemType) {
+        case "repo":
+            return itemData.html_url || "";
+        case "issue":
+        case "pr":
+            return itemData.html_url || "";
+        case "org":
+            // Organizations use github.com/orgname format
+            return itemData.login ? "https://github.com/" + itemData.login : "";
+        default:
+            return "";
+        }
+    }
+
     function getTitle() {
         if (!itemData)
             return "";
@@ -91,10 +109,25 @@ Rectangle {
     color: mouseArea.containsMouse ? Kirigami.Theme.highlightColor : "transparent"
     radius: 8
 
+    // Clipboard helper using TextEdit workaround
+    TextEdit {
+        id: clipboardHelper
+
+        function copyToClipboard(text) {
+            clipboardHelper.text = text;
+            clipboardHelper.selectAll();
+            clipboardHelper.copy();
+            console.log("✓ Copied to clipboard:", text);
+        }
+
+        visible: false
+    }
+
     MouseArea {
         id: mouseArea
 
         anchors.fill: parent
+        anchors.rightMargin: 30 // Leave space for hamburger menu
         hoverEnabled: true
         onClicked: {
             listItem.clicked(itemData);
@@ -246,6 +279,50 @@ Rectangle {
                     text: (itemData ? (itemData.public_repos || 0) : 0) + " repos"
                     opacity: 0.6
                     font.pixelSize: 15
+                }
+
+            }
+
+        }
+
+        // Hamburger menu button
+        PlasmaComponents3.Button {
+            id: menuButton
+
+            icon.name: "application-menu"
+            flat: true
+            implicitWidth: 24
+            implicitHeight: 24
+            onClicked: contextMenu.opened ? contextMenu.close() : contextMenu.popup(menuButton, 0, menuButton.height)
+
+            PlasmaComponents3.Menu {
+                id: contextMenu
+
+                PlasmaComponents3.MenuItem {
+                    text: "Copy URL"
+                    icon.name: "edit-copy"
+                    enabled: getItemUrl() !== ""
+                    onTriggered: {
+                        var url = getItemUrl();
+                        if (url)
+                            clipboardHelper.copyToClipboard(url);
+
+                    }
+                }
+
+                PlasmaComponents3.MenuSeparator {
+                }
+
+                PlasmaComponents3.MenuItem {
+                    text: "Open in GitHub"
+                    icon.name: "internet-services"
+                    enabled: getItemUrl() !== ""
+                    onTriggered: {
+                        var url = getItemUrl();
+                        if (url)
+                            Qt.openUrlExternally(url);
+
+                    }
                 }
 
             }
