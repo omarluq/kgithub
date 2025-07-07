@@ -41,7 +41,14 @@ PlasmoidItem {
             // In detail context, no tabs needed - single view
             return tabs;
         } else if (root.inRepositoryContext) {
-            // In repository context, only show Issues and PRs tabs
+            // In repository context, show README (if available), Issues and PRs tabs
+            if (dataManager.repositoryReadmeData) {
+                tabs.push({
+                    id: "repo-readme",
+                    name: "README",
+                    data: dataManager.repositoryReadmeData
+                });
+            }
             tabs.push({
                 id: "repo-issues",
                 name: "Issues",
@@ -113,6 +120,7 @@ PlasmoidItem {
         root.visibleTabs = buildVisibleTabsList();
 
         // Fetch repository-specific data
+        dataManager.fetchRepositoryReadme(repository.full_name);
         dataManager.fetchRepositoryIssues(repository.full_name, 1);
         dataManager.fetchRepositoryPRs(repository.full_name, 1);
 
@@ -211,6 +219,10 @@ PlasmoidItem {
         }
 
         onWidthRecalculationNeeded: {
+            // Rebuild tabs if we're in repository context (for README data changes)
+            if (root.inRepositoryContext) {
+                root.visibleTabs = buildVisibleTabsList();
+            }
             root.triggerWidthRecalculation();
         }
     }
@@ -323,11 +335,24 @@ PlasmoidItem {
 
                 // Get data based on current context
                 if (root.inRepositoryContext) {
-                    // Repository context
-                    if (root.currentTabIndex === 0) {
-                        currentData = dataManager.repositoryIssuesData || [];
+                    // Repository context - get data based on actual tab ID
+                    if (root.currentTabIndex < root.visibleTabs.length && root.visibleTabs[root.currentTabIndex]) {
+                        var currentTabId = root.visibleTabs[root.currentTabIndex].id;
+                        switch (currentTabId) {
+                        case "repo-readme":
+                            currentData = []; // README doesn't use list data
+                            break;
+                        case "repo-issues":
+                            currentData = dataManager.repositoryIssuesData || [];
+                            break;
+                        case "repo-prs":
+                            currentData = dataManager.repositoryPRsData || [];
+                            break;
+                        default:
+                            currentData = [];
+                        }
                     } else {
-                        currentData = dataManager.repositoryPRsData || [];
+                        currentData = [];
                     }
                 } else {
                     // Global context - check current tab
@@ -353,6 +378,14 @@ PlasmoidItem {
                             currentData = [];
                         }
                     }
+                }
+
+                // Special handling for README tab
+                if (root.inRepositoryContext && root.currentTabIndex < root.visibleTabs.length &&
+                    root.visibleTabs[root.currentTabIndex] && root.visibleTabs[root.currentTabIndex].id === "repo-readme") {
+                    // Fixed height for README tab
+                    var readmeHeight = 400; // Fixed reasonable height for README content
+                    return Math.max(headerHeight + profileCardHeight + tabBarHeight + readmeHeight + errorHeight + margins + componentSpacing, 200);
                 }
 
                 var actualItems = Math.min(root.itemsPerPage, currentData.length);
@@ -520,9 +553,18 @@ PlasmoidItem {
                             spacing: Kirigami.Units.smallSpacing
                             property string tabId: modelData.id
 
+                            // README view for repo-readme tab
+                            Components.ReadmeView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                readmeData: dataManager.repositoryReadmeData
+                                visible: tabId === "repo-readme"
+                            }
+
                             ScrollView {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
+                                visible: tabId !== "repo-readme"
 
                                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                                 ScrollBar.vertical.policy: {
@@ -629,6 +671,7 @@ PlasmoidItem {
 
                             Components.PaginationControls {
                                 Layout.fillWidth: true
+                                visible: tabId !== "repo-readme"
                                 currentPage: {
                                     switch (tabId) {
                                     case "repos":

@@ -217,6 +217,11 @@ QtObject {
         makeRequest(url, callback);
     }
 
+    function getRepositoryReadme(owner, repo, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/readme";
+        makeRequest(url, callback);
+    }
+
     // Detailed data fetching for issues and PRs
     function getIssueDetails(owner, repo, issueNumber, callback) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber;
