@@ -13,10 +13,6 @@ ColumnLayout {
     property alias cfg_githubUsername: githubUsernameField.text
     property alias cfg_refreshInterval: refreshIntervalSpinBox.value
 
-    property string cfg_githubTokenDefault: ""
-    property string cfg_githubUsernameDefault: ""
-    property int cfg_refreshIntervalDefault: 5
-
     Kirigami.FormLayout {
         Layout.fillWidth: true
 

@@ -22,6 +22,8 @@ PlasmoidItem {
     readonly property int iconTheme: plasmoid.configuration.iconTheme !== undefined ? plasmoid.configuration.iconTheme : 0
     readonly property bool showIconInTitle: plasmoid.configuration.showIconInTitle !== undefined ? plasmoid.configuration.showIconInTitle : true
     readonly property bool showProfileCard: plasmoid.configuration.showProfileCard !== undefined ? plasmoid.configuration.showProfileCard : true
+    readonly property bool useProfileCarousel: plasmoid.configuration.useProfileCarousel !== undefined ? plasmoid.configuration.useProfileCarousel : false
+    readonly property int commitGraphColor: plasmoid.configuration.commitGraphColor !== undefined ? plasmoid.configuration.commitGraphColor : 0
     readonly property int defaultReadmeViewMode: plasmoid.configuration.defaultReadmeViewMode !== undefined ? plasmoid.configuration.defaultReadmeViewMode : 2
     readonly property int defaultCommentViewMode: plasmoid.configuration.defaultCommentViewMode !== undefined ? plasmoid.configuration.defaultCommentViewMode : 1
     readonly property bool showUserAvatars: plasmoid.configuration.showUserAvatars !== undefined ? plasmoid.configuration.showUserAvatars : true
@@ -327,7 +329,7 @@ PlasmoidItem {
 
             // Base component heights (scaled 1.5x)
             var headerHeight = 60;
-            var profileCardHeight = (dataManager.userData && root.showProfileCard) ? 126 : 0; // Hide if no user data or disabled
+            var profileCardHeight = (dataManager.userData && root.showProfileCard) ? (root.useProfileCarousel ? 200 : 126) : 0; // Taller for carousel
             var tabBarHeight = root.inDetailContext ? 0 : 48; // No tabs in detail view
             var margins = 30; // Top and bottom margins
             var errorHeight = dataManager.errorMessage !== "" ? 36 : 0;
@@ -386,6 +388,9 @@ PlasmoidItem {
                             break;
                         case "starred":
                             currentData = dataManager.starredRepositoriesData || [];
+                            break;
+                        case "leaderboard":
+                            currentData = [1, 2, 3, 4, 5]; // Mock 5 items for height calculation
                             break;
                         default:
                             currentData = [];
@@ -519,7 +524,7 @@ PlasmoidItem {
                 }
             }
 
-            // User profile card
+            // User profile card or carousel
             Components.UserProfileCard {
                 Layout.fillWidth: true
                 Layout.bottomMargin: root.inDetailContext ? 8 : 0
@@ -527,7 +532,20 @@ PlasmoidItem {
                 repositoryCount: dataManager.totalRepos
                 totalStars: dataManager.totalStars
                 showUserAvatars: root.showUserAvatars
-                visible: root.showProfileCard
+                visible: root.showProfileCard && !root.useProfileCarousel
+            }
+
+            Components.ProfileCarousel {
+                Layout.fillWidth: true
+                Layout.bottomMargin: root.inDetailContext ? 8 : 0
+                userData: dataManager.userData
+                repositoryCount: dataManager.totalRepos
+                totalStars: dataManager.totalStars
+                showUserAvatars: root.showUserAvatars
+                commitData: dataManager.commitActivityData
+                commitGraphColor: root.commitGraphColor
+                dataManagerInstance: dataManager
+                visible: root.showProfileCard && root.useProfileCarousel
             }
 
             // Tab bar
