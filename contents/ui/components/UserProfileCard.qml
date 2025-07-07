@@ -10,11 +10,14 @@ Rectangle {
     property int repositoryCount: 0
     property int totalStars: 0
     property bool showUserAvatars: true
+    property bool hideCardBorder: false
 
     Layout.fillWidth: true
     Layout.preferredHeight: userInfo.implicitHeight + 30
-    color: Kirigami.Theme.alternateBackgroundColor
-    radius: 8
+    color: "transparent"
+    border.width: hideCardBorder ? 0 : 1
+    border.color: hideCardBorder ? "transparent" : Qt.rgba(0.5, 0.5, 0.5, 0.3)
+    radius: hideCardBorder ? 0 : 9
     visible: userData !== null
 
     RowLayout {

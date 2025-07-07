@@ -54,6 +54,14 @@
       <label>Show profile card</label>
       <default>true</default>
     </entry>
+    <entry name="useProfileCarousel" type="Bool">
+      <label>Use profile carousel</label>
+      <default>false</default>
+    </entry>
+    <entry name="commitGraphColor" type="Int">
+      <label>Commit graph color scheme</label>
+      <default>0</default>
+    </entry>
     <entry name="defaultReadmeViewMode" type="Int">
       <label>Default README view mode</label>
       <default>2</default>

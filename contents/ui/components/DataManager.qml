@@ -18,6 +18,7 @@ Item {
     property var pullRequestsData: []
     property var organizationsData: []
     property var starredRepositoriesData: []
+    property var commitActivityData: null
     // Repository-specific data
     property var repositoryIssuesData: []
     property var repositoryPRsData: []
@@ -142,8 +143,9 @@ Item {
             widthRecalculationNeeded();
             // Cache the user data
             updateCache(userDataCache, data);
-            // Calculate total stars but don't auto-load any tab data
+            // Calculate total stars and fetch commit activity
             calculateTotalStars();
+            fetchCommitActivity();
             isLoading = false;
         });
     }
@@ -240,6 +242,26 @@ Item {
                 else
                     totalStarredRepos = data.length === itemsPerPage ? 1000 : data.length;
             }
+            dataUpdated();
+        });
+    }
+
+    function fetchCommitActivity() {
+        if (!githubUsername) {
+            console.log("No GitHub username configured for commit activity");
+            return ;
+        }
+        console.log("Fetching commit activity for:", githubUsername);
+        githubClient.getUserCommitActivity(githubUsername, function(data, error) {
+            if (error) {
+                console.log("Failed to fetch commit activity:", error.message);
+                errorMessage = "Failed to fetch commit activity: " + error.message;
+                errorOccurred(errorMessage);
+                return ;
+            }
+            commitActivityData = data;
+            console.log("Commit activity loaded:", data ? data.totalCommits + " commits" : "no data");
+            widthRecalculationNeeded();
             dataUpdated();
         });
     }

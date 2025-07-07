@@ -13,6 +13,8 @@ ScrollView {
     property alias cfg_iconTheme: iconThemeComboBox.currentIndex
     property alias cfg_showIconInTitle: showIconInTitleCheckBox.checked
     property alias cfg_showProfileCard: showProfileCardCheckBox.checked
+    property alias cfg_useProfileCarousel: useProfileCarouselCheckBox.checked
+    property alias cfg_commitGraphColor: commitGraphColorComboBox.currentIndex
     property alias cfg_itemsPerPage: itemsPerPageSpinBox.value
     property alias cfg_showRepositoriesTab: showRepositoriesCheckBox.checked
     property alias cfg_showIssuesTab: showIssuesCheckBox.checked
@@ -26,23 +28,6 @@ ScrollView {
     property alias cfg_showRepoAvatars: showRepoAvatarsCheckBox.checked
     property alias cfg_showIssueAvatars: showIssueAvatarsCheckBox.checked
     property alias cfg_showPRAvatars: showPRAvatarsCheckBox.checked
-
-    property int cfg_iconThemeDefault: 0
-    property bool cfg_showIconInTitleDefault: true
-    property bool cfg_showProfileCardDefault: true
-    property int cfg_itemsPerPageDefault: 5
-    property bool cfg_showRepositoriesTabDefault: true
-    property bool cfg_showIssuesTabDefault: true
-    property bool cfg_showPullRequestsTabDefault: true
-    property bool cfg_showOrganizationsTabDefault: true
-    property bool cfg_showStarredTabDefault: true
-    property int cfg_defaultReadmeViewModeDefault: 2
-    property int cfg_defaultCommentViewModeDefault: 1
-    property bool cfg_showUserAvatarsDefault: true
-    property bool cfg_showOrgAvatarsDefault: true
-    property bool cfg_showRepoAvatarsDefault: true
-    property bool cfg_showIssueAvatarsDefault: true
-    property bool cfg_showPRAvatarsDefault: true
 
     // Fix scrolling behavior
     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -108,6 +93,70 @@ ScrollView {
             id: showProfileCardCheckBox
             Kirigami.FormData.label: "Show profile card:"
             checked: true
+        }
+
+        PlasmaComponents3.CheckBox {
+            id: useProfileCarouselCheckBox
+            Kirigami.FormData.label: "Show commit graph:"
+            checked: false
+        }
+
+        RowLayout {
+            Kirigami.FormData.label: "Commit graph color:"
+            spacing: Kirigami.Units.smallSpacing
+
+            PlasmaComponents3.ComboBox {
+                id: commitGraphColorComboBox
+                model: ["Green (GitHub style)", "Blue", "Purple", "Orange", "Red"]
+                currentIndex: 0
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+            }
+
+            // Color preview
+            Rectangle {
+                width: Kirigami.Units.iconSizes.medium
+                height: Kirigami.Units.iconSizes.medium
+                radius: 4
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(0.5, 0.5, 0.5, 0.3)
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 2
+                    Repeater {
+                        model: 5
+                        Rectangle {
+                            width: 6
+                            height: 6
+                            radius: 1
+                            color: {
+                                var intensity = index / 4.0;
+                                switch(commitGraphColorComboBox.currentIndex) {
+                                    case 0: // Green
+                                        return Qt.rgba(0.1 + intensity * 0.5, 0.6 + intensity * 0.4, 0.1 + intensity * 0.5, 1);
+                                    case 1: // Blue
+                                        return Qt.rgba(0.1 + intensity * 0.3, 0.3 + intensity * 0.5, 0.6 + intensity * 0.4, 1);
+                                    case 2: // Purple
+                                        return Qt.rgba(0.4 + intensity * 0.4, 0.1 + intensity * 0.3, 0.6 + intensity * 0.4, 1);
+                                    case 3: // Orange
+                                        return Qt.rgba(0.8 + intensity * 0.2, 0.4 + intensity * 0.4, 0.1 + intensity * 0.2, 1);
+                                    case 4: // Red
+                                        return Qt.rgba(0.6 + intensity * 0.4, 0.1 + intensity * 0.3, 0.1 + intensity * 0.3, 1);
+                                    default:
+                                        return Qt.rgba(0.95, 0.95, 0.95, 1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            PlasmaComponents3.Label {
+                text: commitGraphColorComboBox.currentText
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+            }
         }
 
         Item {
