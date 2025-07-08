@@ -1,9 +1,9 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import org.kde.plasma.plasmoid 2.0
-import org.kde.plasma.components 3.0 as PlasmaComponents3
-import org.kde.kirigami 2.20 as Kirigami
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import org.kde.plasma.plasmoid
+import org.kde.plasma.components as PlasmaComponents3
+import org.kde.kirigami as Kirigami
 import "components" as Components
 
 PlasmoidItem {
@@ -46,6 +46,9 @@ PlasmoidItem {
     property var currentItem: null  // Current issue or PR being viewed
     property string previousTabId: ""
     property string previousGlobalTabId: "" // For repository → global navigation
+
+    // Navigation history stack for search results
+    property var navigationHistory: []
 
     // Dynamic tab management
     property var visibleTabs: []
@@ -127,10 +130,51 @@ PlasmoidItem {
         widthTrigger++;
     }
 
-    function enterRepositoryContext(repository) {
+    function enterRepositoryContext(repository, skipHistoryUpdate = false) {
         // Save current global tab ID to return to later
         if (root.currentTabIndex < root.visibleTabs.length) {
             root.previousGlobalTabId = root.visibleTabs[root.currentTabIndex].id;
+        }
+
+        // Add current context to navigation history (unless we're navigating back)
+        if (!skipHistoryUpdate) {
+            var historyEntry = {
+                type: "repository",
+                repository: repository,
+                timestamp: Date.now()
+            };
+
+            // Avoid duplicate entries
+            var isDuplicate = false;
+            if (navigationHistory.length > 0) {
+                var lastEntry = navigationHistory[navigationHistory.length - 1];
+                if (lastEntry.type === "repository" &&
+                    lastEntry.repository &&
+                    lastEntry.repository.full_name === repository.full_name) {
+                    isDuplicate = true;
+                }
+            }
+
+            if (!isDuplicate) {
+                navigationHistory.push(historyEntry);
+                // Keep history limited to last 10 items
+                if (navigationHistory.length > 10) {
+                    navigationHistory.shift();
+                }
+            }
+        }
+
+        // Clear previous repository data when switching to a different repository
+        if (root.currentRepository && root.currentRepository.full_name !== repository.full_name) {
+            dataManager.repositoryReadmeData = null;
+            dataManager.repositoryIssuesData = [];
+            dataManager.repositoryPRsData = [];
+
+            // Clear the loaded cache for the previous repository
+            var prevRepoName = root.currentRepository.full_name;
+            delete dataManager.loadedRepoTabs[prevRepoName + "-readme"];
+            delete dataManager.loadedRepoTabs[prevRepoName + "-issues"];
+            delete dataManager.loadedRepoTabs[prevRepoName + "-prs"];
         }
 
         root.currentRepository = repository;
@@ -178,19 +222,59 @@ PlasmoidItem {
         root.triggerWidthRecalculation();
     }
 
+    function navigateBack() {
+        if (root.inDetailContext) {
+            root.exitDetailContext();
+            return;
+        }
+
+        if (navigationHistory.length > 1) {
+            // Remove current item
+            navigationHistory.pop();
+
+            // Get the previous item
+            var previousEntry = navigationHistory[navigationHistory.length - 1];
+
+            // Navigate to the previous item without adding to history
+            if (previousEntry.type === "repo") {
+                root.enterRepositoryContext(previousEntry.data, true);
+            } else if (previousEntry.type === "issue" || previousEntry.type === "pr") {
+                // Re-navigate to the previous issue/PR
+                root.navigateToSearchResult(previousEntry.data);
+                // Remove the duplicate entry we just added
+                navigationHistory.pop();
+            }
+        } else {
+            // No more history, go back to global view
+            root.exitRepositoryContext();
+            navigationHistory = [];
+        }
+    }
+
     function enterDetailContext(item) {
-        // Save current tab ID to return to later
-        if (root.currentTabIndex < root.visibleTabs.length) {
+
+        // Save current tab ID to return to later (only if not already in detail context)
+        if (!root.inDetailContext && root.currentTabIndex < root.visibleTabs.length) {
             root.previousTabId = root.visibleTabs[root.currentTabIndex].id;
         }
+
+        // Clear previous detail data ALWAYS
+        dataManager.currentIssueDetail = null;
+        dataManager.currentPRDetail = null;
+        dataManager.currentItemComments = [];
+
 
         root.currentItem = item;
         root.inDetailContext = true;
         root.visibleTabs = buildVisibleTabsList();
 
+        // Force UI update after clearing data
+        dataManager.dataUpdated();
+        root.triggerWidthRecalculation();
+
         // Fetch detailed data for the item
         if (root.currentRepository && item) {
-            if (item.pull_request) {
+            if (item.pull_request || item.searchResultType === "pr") {
                 // It's a PR
                 dataManager.fetchPullRequestDetails(root.currentRepository.full_name, item.number);
             } else {
@@ -230,6 +314,67 @@ PlasmoidItem {
         root.triggerWidthRecalculation();
     }
 
+    function navigateToSearchResult(item) {
+        // Search field is already cleared by SearchComponent
+
+        // Add this navigation to history FIRST
+        var historyEntry = {
+            type: item.searchResultType,
+            data: item,
+            timestamp: Date.now()
+        };
+        navigationHistory.push(historyEntry);
+        if (navigationHistory.length > 10) {
+            navigationHistory.shift();
+        }
+
+        switch (item.searchResultType) {
+        case "repo":
+            root.enterRepositoryContext(item, true); // Skip adding to history again
+            break;
+        case "issue":
+        case "pr":
+            // Extract repository info from search result
+            var repoInfo = null;
+            if (item.repository_url) {
+                var parts = item.repository_url.split('/');
+                repoInfo = {
+                    full_name: parts[parts.length - 2] + "/" + parts[parts.length - 1],
+                    name: parts[parts.length - 1],
+                    owner: { login: parts[parts.length - 2] }
+                };
+            } else if (item.html_url) {
+                var urlParts = item.html_url.split('/');
+                repoInfo = {
+                    full_name: urlParts[3] + "/" + urlParts[4],
+                    name: urlParts[4],
+                    owner: { login: urlParts[3] }
+                };
+            }
+
+            if (repoInfo) {
+                // Always clear previous data when switching repositories
+                if (!root.currentRepository || root.currentRepository.full_name !== repoInfo.full_name) {
+                    if (root.currentRepository) {
+                        dataManager.repositoryReadmeData = null;
+                        dataManager.repositoryIssuesData = [];
+                        dataManager.repositoryPRsData = [];
+                        var prevRepoName = root.currentRepository.full_name;
+                        delete dataManager.loadedRepoTabs[prevRepoName + "-readme"];
+                        delete dataManager.loadedRepoTabs[prevRepoName + "-issues"];
+                        delete dataManager.loadedRepoTabs[prevRepoName + "-prs"];
+                    }
+                    root.currentRepository = repoInfo;
+                    root.inRepositoryContext = true;
+                }
+
+                root.enterDetailContext(item);
+            }
+            break;
+        default:
+        }
+    }
+
     // Data Manager - centralized data handling
     Components.DataManager {
         id: dataManager
@@ -253,6 +398,7 @@ PlasmoidItem {
             }
             root.triggerWidthRecalculation();
         }
+
     }
 
     // Preferred representation
@@ -476,11 +622,7 @@ PlasmoidItem {
                     flat: true
                     visible: root.inRepositoryContext || root.inDetailContext
                     onClicked: {
-                        if (root.inDetailContext) {
-                            root.exitDetailContext();
-                        } else {
-                            root.exitRepositoryContext();
-                        }
+                        root.navigateBack();
                     }
                     PlasmaComponents3.ToolTip.text: {
                         if (root.inDetailContext) {
@@ -529,6 +671,32 @@ PlasmoidItem {
                         level: 3
                         Layout.fillWidth: true
                     }
+                }
+
+                // Search component - centered
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Components.SearchComponent {
+                    id: searchComponent
+                    dataManagerInstance: dataManager
+                    showUserAvatars: root.showUserAvatars
+                    showOrgAvatars: root.showOrgAvatars
+                    showRepoAvatars: root.showRepoAvatars
+                    showIssueAvatars: root.showIssueAvatars
+                    showPRAvatars: root.showPRAvatars
+                    onSearchResultClicked: function(item) {
+                        navigateToSearchResult(item);
+                    }
+                    onOpenItem: function(item) {
+                        console.log("Main: onOpenItem signal received for:", item);
+                        navigateToSearchResult(item);
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
                 }
 
                 PlasmaComponents3.Button {

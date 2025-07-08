@@ -17,6 +17,7 @@ A KDE Plasma widget for GitHub integration that displays repositories, issues, p
 - ⭐ **Starred Repositories** - Browse your starred repositories
 - 🎛️ **Configurable Interface** - Show/hide any tab to customize your workflow
 - 🔄 **Auto-Refresh** - Configurable automatic refresh intervals
+- 🔍 **Advanced Search** - Powerful search functionality with type-specific prefixes
 
 ![Configuration Panel](screenshots/settings.png)
 
@@ -87,6 +88,74 @@ kpackagetool6 --type Plasma/Applet --upgrade .
    - Starred Repositories
 
 ![GitHub Token Configuration](screenshots/settings.png)
+
+## 🔍 Search Functionality
+
+KGitHub provides a powerful search feature that allows you to find repositories, issues, and pull requests quickly and efficiently.
+
+### Basic Search
+
+Simply type in the search field (minimum 3 characters) to search across all content types:
+
+```
+javascript
+```
+
+This will search repositories, issues, and pull requests simultaneously and display combined results sorted by most recent activity.
+
+### Advanced Search with Prefixes
+
+Use specific prefixes to target your search to a particular content type:
+
+#### Repository Search
+```
+repo:react
+repo:rails/rails
+repo:microsoft
+```
+- `repo:react` - Searches for repositories with "react" in name or description
+- `repo:rails/rails` - Searches for the specific "rails/rails" repository
+- Returns up to 15 repository results
+- Perfect for finding specific projects or exploring repositories
+
+#### Issue Search
+```
+issue:bug fix
+issue:memory leak
+issue:authentication error
+```
+- Searches for issues across all repositories
+- Returns up to 15 issue results
+- Great for finding specific problems or tracking issues
+
+#### Pull Request Search
+```
+pr:feature update
+pr:security patch
+pr:documentation
+```
+- Searches for pull requests across all repositories
+- Returns up to 15 pull request results
+- Useful for reviewing code changes or tracking contributions
+
+### Search Features
+
+- **Real-time Search** - Results appear as you type (after 3+ characters)
+- **Smart Parsing** - Automatically detects search prefixes (case-insensitive)
+- **Visual Feedback** - Loading spinner during search, smooth result animations
+- **Result Previews** - Each result shows title, description, and type-specific information
+- **Direct Navigation** - Click any result to navigate to that content
+- **Avatar Support** - Shows user/organization avatars based on appearance settings
+
+### Search Examples
+
+| Search Query | Description | Results |
+|--------------|-------------|---------|
+| `javascript` | Global search for JavaScript-related content | Mixed repos, issues, PRs |
+| `repo:vue` | Find repositories with "vue" in the name | Repository results only |
+| `issue:cors error` | Find issues about CORS errors | Issue results only |
+| `pr:typescript` | Find pull requests related to TypeScript | Pull request results only |
+| `repo:microsoft/vscode` | Find the specific VS Code repository | Specific repository match |
 
 ## 🖼️ Screenshots
 

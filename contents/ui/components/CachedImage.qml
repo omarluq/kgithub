@@ -1,5 +1,5 @@
 import "../utils/ImageCache.js" as ImageCacheJS
-import QtQuick 2.15
+import QtQuick
 
 Image {
     id: cachedImage

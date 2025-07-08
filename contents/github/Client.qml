@@ -1,4 +1,4 @@
-import QtQuick 2.15
+import QtQuick
 
 QtObject {
     id: client
@@ -576,6 +576,28 @@ QtObject {
     // Get user profile README
     function getUserProfileReadme(username, callback) {
         var url = baseUrl + "/repos/" + encodeURIComponent(username) + "/" + encodeURIComponent(username) + "/readme";
+        makeRequest(url, callback);
+    }
+
+    // Global search methods
+    function searchRepositories(query, page = 1, perPage = 10, callback) {
+        var url = baseUrl + "/search/repositories";
+        url += "?q=" + encodeURIComponent(query);
+        url += "&per_page=" + perPage + "&page=" + page + "&sort=updated";
+        makeRequest(url, callback);
+    }
+
+    function globalSearchIssues(query, page = 1, perPage = 10, callback) {
+        var url = baseUrl + "/search/issues";
+        url += "?q=" + encodeURIComponent(query + " is:issue");
+        url += "&per_page=" + perPage + "&page=" + page + "&sort=updated";
+        makeRequest(url, callback);
+    }
+
+    function globalSearchPullRequests(query, page = 1, perPage = 10, callback) {
+        var url = baseUrl + "/search/issues";
+        url += "?q=" + encodeURIComponent(query + " is:pr");
+        url += "&per_page=" + perPage + "&page=" + page + "&sort=updated";
         makeRequest(url, callback);
     }
 }

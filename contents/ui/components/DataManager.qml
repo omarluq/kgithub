@@ -1,8 +1,7 @@
 import "../../github" as GitHub
-import QtQuick 2.15
+import QtQuick
 
 Item {
-    // Estimate higher number for first page if full
     // Estimate higher number for first page if full
 
     id: dataManager
@@ -28,6 +27,10 @@ Item {
     property var currentIssueDetail: null
     property var currentPRDetail: null
     property var currentItemComments: []
+    // Search data
+    property var searchResults: []
+    property bool isSearching: false
+    property string currentSearchQuery: ""
     // State properties
     property bool isLoading: false
     property string errorMessage: ""
@@ -84,6 +87,7 @@ Item {
     signal dataUpdated()
     signal errorOccurred(string message)
     signal widthRecalculationNeeded()
+    signal searchCompleted(var results)
 
     // Utility functions
     function isCacheValid(cache) {
@@ -581,6 +585,137 @@ Item {
             }
             dataUpdated();
         });
+    }
+
+    // Global search functionality
+    function performGlobalSearch(query) {
+        function onSearchComplete() {
+            completedRequests++;
+            if (completedRequests >= totalRequests) {
+                // Sort all results by updated_at descending
+                allResults.sort(function(a, b) {
+                    var dateA = new Date(a.updated_at || a.created_at || 0);
+                    var dateB = new Date(b.updated_at || b.created_at || 0);
+                    return dateB.getTime() - dateA.getTime();
+                });
+                searchResults = allResults;
+                isSearching = false;
+                searchCompleted(allResults);
+                dataUpdated();
+            }
+        }
+
+        if (!query || query.length < 2) {
+            searchResults = [];
+            isSearching = false;
+            currentSearchQuery = "";
+            searchCompleted([]);
+            return ;
+        }
+        if (!isConfigured()) {
+            errorMessage = "Please configure GitHub token and username in settings";
+            errorOccurred(errorMessage);
+            return ;
+        }
+        isSearching = true;
+        currentSearchQuery = query;
+        var allResults = [];
+        var completedRequests = 0;
+        var totalRequests = 3; // repos, issues, PRs
+        // Search repositories
+        githubClient.searchRepositories(query, 1, 5, function(data, error) {
+            if (!error && data && data.items) {
+                for (var i = 0; i < data.items.length; i++) {
+                    var repo = data.items[i];
+                    repo.searchResultType = "repo";
+                    allResults.push(repo);
+                }
+            }
+            onSearchComplete();
+        });
+        // Search issues
+        githubClient.globalSearchIssues(query, 1, 5, function(data, error) {
+            if (!error && data && data.items) {
+                for (var i = 0; i < data.items.length; i++) {
+                    var issue = data.items[i];
+                    issue.searchResultType = "issue";
+                    allResults.push(issue);
+                }
+            }
+            onSearchComplete();
+        });
+        // Search pull requests
+        githubClient.globalSearchPullRequests(query, 1, 5, function(data, error) {
+            if (!error && data && data.items) {
+                for (var i = 0; i < data.items.length; i++) {
+                    var pr = data.items[i];
+                    pr.searchResultType = "pr";
+                    allResults.push(pr);
+                }
+            }
+            onSearchComplete();
+        });
+    }
+
+    // Advanced search functionality with type-specific searching
+    function performAdvancedSearch(searchType, query) {
+        function onSearchComplete(data, error, resultType) {
+            isSearching = false;
+            if (!error && data && data.items) {
+                for (var i = 0; i < data.items.length; i++) {
+                    var item = data.items[i];
+                    item.searchResultType = resultType;
+                    results.push(item);
+                }
+                // Sort results by updated_at descending
+                results.sort(function(a, b) {
+                    var dateA = new Date(a.updated_at || a.created_at || 0);
+                    var dateB = new Date(b.updated_at || b.created_at || 0);
+                    return dateB.getTime() - dateA.getTime();
+                });
+            }
+            searchResults = results;
+            searchCompleted(results);
+            dataUpdated();
+        }
+
+        if (!query || query.length < 2) {
+            searchResults = [];
+            isSearching = false;
+            currentSearchQuery = "";
+            searchCompleted([]);
+            return ;
+        }
+        if (!isConfigured()) {
+            errorMessage = "Please configure GitHub token and username in settings";
+            errorOccurred(errorMessage);
+            return ;
+        }
+        isSearching = true;
+        currentSearchQuery = searchType + ":" + query;
+        var results = [];
+        // Perform type-specific search with higher limits since we're only searching one type
+        switch (searchType) {
+        case "repo":
+            githubClient.searchRepositories(query, 1, 15, function(data, error) {
+                onSearchComplete(data, error, "repo");
+            });
+            break;
+        case "issue":
+            githubClient.globalSearchIssues(query, 1, 15, function(data, error) {
+                onSearchComplete(data, error, "issue");
+            });
+            break;
+        case "pr":
+            githubClient.globalSearchPullRequests(query, 1, 15, function(data, error) {
+                onSearchComplete(data, error, "pr");
+            });
+            break;
+        default:
+            // Fallback to global search for unknown types
+            performGlobalSearch(query);
+            return ;
+        }
     }
 
     Component.onCompleted: {
