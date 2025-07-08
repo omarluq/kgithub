@@ -97,7 +97,8 @@ ColumnLayout {
             "type": "description",
             "author": itemData.user,
             "created_at": itemData.created_at,
-            "body": itemData.body || ""
+            "body": itemData.body || "",
+            "reactions": (detailData && detailData.reactions) ? detailData.reactions : []
         });
 
         // Add comments
@@ -107,7 +108,8 @@ ColumnLayout {
                     "type": "comment",
                     "author": commentsData[i].user,
                     "created_at": commentsData[i].created_at,
-                    "body": commentsData[i].body
+                    "body": commentsData[i].body,
+                    "reactions": commentsData[i].reactions || []
                 });
             }
         }
@@ -149,6 +151,7 @@ ColumnLayout {
     spacing: 0
     onItemDataChanged: Qt.callLater(updateTimelineData)
     onCommentsDataChanged: Qt.callLater(updateTimelineData)
+    onDetailDataChanged: Qt.callLater(updateTimelineData)
 
     // Clipboard helper using TextEdit workaround
     TextEdit {
@@ -537,6 +540,13 @@ ColumnLayout {
 
                             }
 
+                        }
+
+                        // Reactions bar - placed outside ScrollView to avoid markdown interference
+                        ReactionBar {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 6
+                            reactions: modelData.reactions || []
                         }
 
                     }

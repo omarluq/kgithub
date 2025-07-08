@@ -225,26 +225,597 @@ QtObject {
     // Detailed data fetching for issues and PRs
     function getIssueDetails(owner, repo, issueNumber, callback) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber;
-        makeRequest(url, callback);
+        makeRequest(url, function(issue, error) {
+            if (error) {
+                callback(null, error);
+                return;
+            }
+
+            // Fetch reactions for the issue
+            getIssueReactions(owner, repo, issueNumber, function(reactions, reactionError) {
+                if (!reactionError && reactions) {
+                    issue.reactions = processReactions(reactions);
+                } else {
+                    issue.reactions = [];
+                }
+                callback(issue, null);
+            });
+        });
     }
 
     function getPullRequestDetails(owner, repo, prNumber, callback) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/pulls/" + prNumber;
-        makeRequest(url, callback);
+        makeRequest(url, function(pr, error) {
+            if (error) {
+                callback(null, error);
+                return;
+            }
+
+            // Fetch reactions for the PR
+            getIssueReactions(owner, repo, prNumber, function(reactions, reactionError) {
+                if (!reactionError && reactions) {
+                    pr.reactions = processReactions(reactions);
+                } else {
+                    pr.reactions = [];
+                }
+                callback(pr, null);
+            });
+        });
     }
 
     function getIssueComments(owner, repo, issueNumber, callback, page = 1, perPage = 30) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber + "/comments";
         url += "?sort=created&direction=asc";
         url += "&page=" + page + "&per_page=" + perPage;
-        makeRequest(url, callback);
+        makeRequest(url, function(comments, error) {
+            if (error) {
+                callback(null, error);
+                return;
+            }
+
+            // Fetch reactions for each comment
+            fetchCommentsWithReactions(owner, repo, comments, callback);
+        });
     }
 
     function getPullRequestComments(owner, repo, prNumber, callback, page = 1, perPage = 30) {
         var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + prNumber + "/comments";
         url += "?sort=created&direction=asc";
         url += "&page=" + page + "&per_page=" + perPage;
+        makeRequest(url, function(comments, error) {
+            if (error) {
+                callback(null, error);
+                return;
+            }
+
+            // Fetch reactions for each comment
+            fetchCommentsWithReactions(owner, repo, comments, callback);
+        });
+    }
+
+    function fetchCommentsWithReactions(owner, repo, comments, callback) {
+        if (!comments || comments.length === 0) {
+            callback(comments, null);
+            return;
+        }
+
+        var completedRequests = 0;
+        var totalRequests = comments.length;
+        var commentsWithReactions = [];
+
+        // Initialize array with correct order
+        for (var i = 0; i < comments.length; i++) {
+            commentsWithReactions[i] = comments[i];
+            commentsWithReactions[i].reactions = [];
+        }
+
+        function checkCompletion() {
+            if (completedRequests >= totalRequests) {
+                callback(commentsWithReactions, null);
+            }
+        }
+
+        // Fetch reactions for each comment
+        for (var i = 0; i < comments.length; i++) {
+            (function(index) {
+                var comment = comments[index];
+                getCommentReactions(owner, repo, comment.id, function(reactions, error) {
+                    if (!error && reactions) {
+                        commentsWithReactions[index].reactions = processReactions(reactions);
+                    } else {
+                        commentsWithReactions[index].reactions = [];
+                    }
+                    completedRequests++;
+                    checkCompletion();
+                });
+            })(i);
+        }
+    }
+
+    function getCommentReactions(owner, repo, commentId, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/comments/" + commentId + "/reactions";
         makeRequest(url, callback);
+    }
+
+    function getIssueReactions(owner, repo, issueNumber, callback) {
+        var url = baseUrl + "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + issueNumber + "/reactions";
+        makeRequest(url, callback);
+    }
+
+    function processReactions(reactions) {
+        if (!reactions || !Array.isArray(reactions)) {
+            return [];
+        }
+
+        // Count reactions by type
+        var reactionCounts = {};
+        var reactionEmojis = {
+            // Official GitHub reactions
+            "+1": "👍",
+            "-1": "👎",
+            "laugh": "😄",
+            "hooray": "🎉",
+            "confused": "😕",
+            "heart": "❤️",
+            "rocket": "🚀",
+            "eyes": "👀",
+
+            // Face emojis
+            "smile": "😊",
+            "smiley": "😃",
+            "grinning": "😀",
+            "blush": "😊",
+            "wink": "😉",
+            "kissing_heart": "😘",
+            "joy": "😂",
+            "sweat_smile": "😅",
+            "laughing": "😆",
+            "innocent": "😇",
+            "smiling_imp": "😈",
+            "sunglasses": "😎",
+            "neutral_face": "😐",
+            "expressionless": "😑",
+            "unamused": "😒",
+            "sweat": "😓",
+            "pensive": "😔",
+            "disappointed": "😞",
+            "confounded": "😖",
+            "fearful": "😨",
+            "weary": "😩",
+            "sleepy": "😪",
+            "tired_face": "😫",
+            "grimacing": "😬",
+            "sob": "😭",
+            "open_mouth": "😮",
+            "hushed": "😯",
+            "cold_sweat": "😰",
+            "scream": "😱",
+            "astonished": "😲",
+            "flushed": "😳",
+            "sleeping": "😴",
+            "dizzy_face": "😵",
+            "no_mouth": "😶",
+            "mask": "😷",
+            "grin": "😁",
+            "stuck_out_tongue": "😛",
+            "stuck_out_tongue_winking_eye": "😜",
+            "stuck_out_tongue_closed_eyes": "😝",
+            "disappointed_relieved": "😥",
+            "worried": "😟",
+            "angry": "😠",
+            "rage": "😡",
+            "triumph": "😤",
+            "relieved": "😌",
+            "nerd_face": "🤓",
+            "thinking": "🤔",
+            "thinking_face": "🤔",
+            "face_with_raised_eyebrow": "🤨",
+            "neutral_face": "😐",
+            "expressionless": "😑",
+            "face_without_mouth": "😶",
+            "smirk": "😏",
+            "persevere": "😣",
+            "disappointed_relieved": "😥",
+            "open_mouth": "😮",
+            "zipper_mouth_face": "🤐",
+            "hushed": "😯",
+            "sleepy": "😪",
+            "tired_face": "😫",
+            "sleeping": "😴",
+            "relieved": "😌",
+            "stuck_out_tongue": "😛",
+            "stuck_out_tongue_winking_eye": "😜",
+            "stuck_out_tongue_closed_eyes": "😝",
+            "drooling_face": "🤤",
+            "unamused": "😒",
+            "sweat": "😓",
+            "pensive": "😔",
+            "confused": "😕",
+            "upside_down_face": "🙃",
+            "money_mouth_face": "🤑",
+            "astonished": "😲",
+            "frowning": "☹️",
+            "slightly_frowning_face": "🙁",
+            "confounded": "😖",
+            "disappointed": "😞",
+            "worried": "😟",
+            "triumph": "😤",
+            "cry": "😢",
+            "sob": "😭",
+            "flushed": "😳",
+            "dizzy_face": "😵",
+            "rage": "😡",
+            "angry": "😠",
+            "smiling_imp": "😈",
+            "imp": "👿",
+            "skull": "💀",
+            "heart_eyes": "😍",
+            "kissing": "😗",
+            "kissing_smiling_eyes": "😙",
+            "kissing_closed_eyes": "😚",
+            "yum": "😋",
+
+            // Hand/gesture emojis
+            "thumbsup": "👍",
+            "thumbsdown": "👎",
+            "ok_hand": "👌",
+            "punch": "👊",
+            "fist": "✊",
+            "v": "✌️",
+            "wave": "👋",
+            "raised_hand": "✋",
+            "open_hands": "👐",
+            "point_up": "☝️",
+            "point_down": "👇",
+            "point_left": "👈",
+            "point_right": "👉",
+            "raised_hands": "🙌",
+            "pray": "🙏",
+            "clap": "👏",
+            "muscle": "💪",
+            "metal": "🤘",
+            "fu": "🖕",
+            "walking": "🚶",
+            "runner": "🏃",
+            "couple": "👫",
+            "family": "👪",
+            "two_men_holding_hands": "👬",
+            "two_women_holding_hands": "👭",
+            "dancer": "💃",
+            "dancers": "👯",
+            "ok_woman": "🙆",
+            "no_good": "🙅",
+            "information_desk_person": "💁",
+            "raising_hand": "🙋",
+            "massage": "💆",
+            "haircut": "💇",
+            "nail_care": "💅",
+            "boy": "👦",
+            "girl": "👧",
+            "woman": "👩",
+            "man": "👨",
+            "baby": "👶",
+            "older_woman": "👵",
+            "older_man": "👴",
+
+            // Heart emojis
+            "yellow_heart": "💛",
+            "blue_heart": "💙",
+            "purple_heart": "💜",
+            "green_heart": "💚",
+            "broken_heart": "💔",
+            "heartbeat": "💓",
+            "heartpulse": "💗",
+            "two_hearts": "💕",
+            "revolving_hearts": "💞",
+            "cupid": "💘",
+            "sparkling_heart": "💖",
+
+            // Nature emojis
+            "sunny": "☀️",
+            "umbrella": "☔",
+            "cloud": "☁️",
+            "snowflake": "❄️",
+            "snowman": "⛄",
+            "zap": "⚡",
+            "cyclone": "🌀",
+            "foggy": "🌁",
+            "ocean": "🌊",
+            "cat": "🐱",
+            "dog": "🐶",
+            "mouse": "🐭",
+            "hamster": "🐹",
+            "rabbit": "🐰",
+            "wolf": "🐺",
+            "frog": "🐸",
+            "tiger": "🐯",
+            "koala": "🐨",
+            "bear": "🐻",
+            "pig": "🐷",
+            "pig_nose": "🐽",
+            "cow": "🐮",
+            "boar": "🐗",
+            "monkey_face": "🐵",
+            "monkey": "🐒",
+            "horse": "🐴",
+            "racehorse": "🐎",
+            "camel": "🐫",
+            "sheep": "🐑",
+            "elephant": "🐘",
+            "panda_face": "🐼",
+            "snake": "🐍",
+            "bird": "🐦",
+            "baby_chick": "🐤",
+            "hatched_chick": "🐥",
+            "hatching_chick": "🐣",
+            "chicken": "🐔",
+            "penguin": "🐧",
+            "turtle": "🐢",
+            "bug": "🐛",
+            "honeybee": "🐝",
+            "ant": "🐜",
+            "beetle": "🪲",
+            "snail": "🐌",
+            "octopus": "🐙",
+            "tropical_fish": "🐠",
+            "fish": "🐟",
+            "whale": "🐳",
+            "whale2": "🐋",
+            "dolphin": "🐬",
+            "cow2": "🐄",
+            "ram": "🐏",
+            "rat": "🐀",
+            "water_buffalo": "🐃",
+            "tiger2": "🐅",
+            "rabbit2": "🐇",
+            "dragon": "🐲",
+            "goat": "🐐",
+            "rooster": "🐓",
+            "dog2": "🐕",
+            "pig2": "🐖",
+            "mouse2": "🐁",
+            "ox": "🐂",
+
+            // Food emojis
+            "apple": "🍎",
+            "green_apple": "🍏",
+            "tangerine": "🍊",
+            "lemon": "🍋",
+            "cherries": "🍒",
+            "grapes": "🍇",
+            "watermelon": "🍉",
+            "strawberry": "🍓",
+            "peach": "🍑",
+            "melon": "🍈",
+            "banana": "🍌",
+            "pear": "🍐",
+            "pineapple": "🍍",
+            "sweet_potato": "🍠",
+            "eggplant": "🍆",
+            "tomato": "🍅",
+            "corn": "🌽",
+
+            // Objects emojis
+            "fire": "🔥",
+            "100": "💯",
+            "bomb": "💣",
+            "tada": "🎉",
+            "confetti_ball": "🎊",
+            "balloon": "🎈",
+            "crystal_ball": "🔮",
+            "dizzy": "💫",
+            "boom": "💥",
+            "collision": "💥",
+            "anger": "💢",
+            "hotsprings": "♨️",
+            "octagonal_sign": "🛑",
+            "clock12": "🕛",
+            "clock1": "🕐",
+            "clock2": "🕑",
+            "clock3": "🕒",
+            "clock4": "🕓",
+            "clock5": "🕔",
+            "clock6": "🕕",
+            "clock7": "🕖",
+            "clock8": "🕗",
+            "clock9": "🕘",
+            "clock10": "🕙",
+            "clock11": "🕚",
+            "new_moon": "🌑",
+            "waxing_crescent_moon": "🌒",
+            "first_quarter_moon": "🌓",
+            "moon": "🌔",
+            "full_moon": "🌕",
+            "waning_gibbous_moon": "🌖",
+            "last_quarter_moon": "🌗",
+            "waning_crescent_moon": "🌘",
+            "crescent_moon": "🌙",
+            "new_moon_with_face": "🌚",
+            "first_quarter_moon_with_face": "🌛",
+            "last_quarter_moon_with_face": "🌜",
+            "full_moon_with_face": "🌝",
+            "sun_with_face": "🌞",
+            "star2": "🌟",
+            "stars": "🌠",
+
+            // Activity emojis
+            "sparkles": "✨",
+            "star": "⭐",
+            "exclamation": "❗",
+            "question": "❓",
+            "grey_exclamation": "❕",
+            "grey_question": "❔",
+            "zzz": "💤",
+            "dash": "💨",
+            "sweat_drops": "💦",
+            "notes": "🎶",
+            "musical_note": "🎵",
+            "fire": "🔥",
+            "hankey": "💩",
+            "poop": "💩",
+            "shit": "💩",
+            "tent": "⛺",
+            "umbrella": "☔",
+            "coffee": "☕",
+            "airplane": "✈️",
+            "anchor": "⚓",
+            "zap": "⚡",
+            "white_check_mark": "✅",
+            "ballot_box_with_check": "☑️",
+            "heavy_check_mark": "✔️",
+            "heavy_multiplication_x": "✖️",
+            "x": "❌",
+            "negative_squared_cross_mark": "❎",
+            "heavy_plus_sign": "➕",
+            "heavy_minus_sign": "➖",
+            "heavy_division_sign": "➗",
+            "curly_loop": "➰",
+            "loop": "➿",
+            "part_alternation_mark": "〽️",
+            "eight_spoked_asterisk": "✳️",
+            "eight_pointed_black_star": "✴️",
+            "sparkle": "❇️",
+            "bangbang": "‼️",
+            "interrobang": "⁉️",
+            "tm": "™️",
+            "information_source": "ℹ️",
+            "left_right_arrow": "↔️",
+            "arrow_up_down": "↕️",
+            "arrow_upper_left": "↖️",
+            "arrow_upper_right": "↗️",
+            "arrow_lower_right": "↘️",
+            "arrow_lower_left": "↙️",
+            "leftwards_arrow_with_hook": "↩️",
+            "arrow_right_hook": "↪️",
+            "watch": "⌚",
+            "hourglass": "⌛",
+            "keyboard": "⌨️",
+            "eject": "⏏️",
+            "fast_forward": "⏩",
+            "rewind": "⏪",
+            "arrow_double_up": "⏫",
+            "arrow_double_down": "⏬",
+            "black_right_pointing_double_triangle_with_vertical_bar": "⏭️",
+            "black_left_pointing_double_triangle_with_vertical_bar": "⏮️",
+            "black_right_pointing_triangle_with_double_vertical_bar": "⏯️",
+            "alarm_clock": "⏰",
+            "stopwatch": "⏱️",
+            "timer_clock": "⏲️",
+            "hourglass_flowing_sand": "⏳",
+            "double_vertical_bar": "⏸️",
+            "black_square_for_stop": "⏹️",
+            "black_circle_for_record": "⏺️",
+            "m": "Ⓜ️",
+            "black_small_square": "▪️",
+            "white_small_square": "▫️",
+            "arrow_forward": "▶️",
+            "arrow_backward": "◀️",
+            "white_medium_square": "◻️",
+            "black_medium_square": "◼️",
+            "white_medium_small_square": "◽",
+            "black_medium_small_square": "◾",
+            "sunny": "☀️",
+            "cloud": "☁️",
+            "umbrella": "☔",
+            "snowman": "☃️",
+            "comet": "☄️",
+            "phone": "☎️",
+            "ballot_box_with_check": "☑️",
+            "umbrella_with_rain_drops": "☔",
+            "coffee": "☕",
+            "shamrock": "☘️",
+            "point_up": "☝️",
+            "skull_and_crossbones": "☠️",
+            "radioactive": "☢️",
+            "biohazard": "☣️",
+            "orthodox_cross": "☦️",
+            "star_and_crescent": "☪️",
+            "peace_symbol": "☮️",
+            "yin_yang": "☯️",
+            "wheel_of_dharma": "☸️",
+            "white_frowning_face": "☹️",
+            "relaxed": "☺️",
+            "female_sign": "♀️",
+            "male_sign": "♂️",
+            "aries": "♈",
+            "taurus": "♉",
+            "gemini": "♊",
+            "cancer": "♋",
+            "leo": "♌",
+            "virgo": "♍",
+            "libra": "♎",
+            "scorpius": "♏",
+            "sagittarius": "♐",
+            "capricorn": "♑",
+            "aquarius": "♒",
+            "pisces": "♓",
+            "chess_pawn": "♟️",
+            "spades": "♠️",
+            "clubs": "♣️",
+            "hearts": "♥️",
+            "diamonds": "♦️",
+            "hotsprings": "♨️",
+            "recycle": "♻️",
+            "infinity": "♾️",
+            "wheelchair": "♿",
+            "hammer_and_pick": "⚒️",
+            "anchor": "⚓",
+            "crossed_swords": "⚔️",
+            "medical_symbol": "⚕️",
+            "balance_scale": "⚖️",
+            "alembic": "⚗️",
+            "gear": "⚙️",
+            "atom_symbol": "⚛️",
+            "fleur_de_lis": "⚜️",
+            "warning": "⚠️",
+            "high_voltage": "⚡",
+            "white_circle": "⚪",
+            "black_circle": "⚫",
+            "red_circle": "🔴",
+            "large_blue_circle": "🔵",
+            "small_orange_diamond": "🔸",
+            "small_blue_diamond": "🔹",
+            "large_orange_diamond": "🔶",
+            "large_blue_diamond": "🔷",
+            "small_red_triangle": "🔺",
+            "small_red_triangle_down": "🔻",
+            "diamond_shape_with_a_dot_inside": "💠",
+            "radio_button": "🔘",
+            "white_square_button": "🔳",
+            "black_square_button": "🔲"
+        };
+
+        for (var i = 0; i < reactions.length; i++) {
+            var reaction = reactions[i];
+            var content = reaction.content;
+
+            if (!reactionCounts[content]) {
+                reactionCounts[content] = {
+                    type: content,
+                    emoji: reactionEmojis[content] || "❓", // Fallback for unknown reaction types
+                    count: 0,
+                    users: []
+                };
+            }
+
+            reactionCounts[content].count++;
+            if (reaction.user && reaction.user.login) {
+                reactionCounts[content].users.push(reaction.user.login);
+            }
+        }
+
+        // Convert to array and sort by count (descending)
+        var sortedReactions = [];
+        for (var type in reactionCounts) {
+            sortedReactions.push(reactionCounts[type]);
+        }
+
+        sortedReactions.sort(function(a, b) {
+            return b.count - a.count;
+        });
+
+        // Return top 5 reactions
+        return sortedReactions.slice(0, 5);
     }
 
     // Commit activity API methods
