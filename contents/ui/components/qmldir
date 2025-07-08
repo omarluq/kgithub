@@ -9,3 +9,4 @@ IssueDetailView 1.0 IssueDetailView.qml
 ReadmeView 1.0 ReadmeView.qml
 CachedImage 1.0 CachedImage.qml
 SearchComponent 1.0 SearchComponent.qml
+ReactionBar 1.0 ReactionBar.qml
