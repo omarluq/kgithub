@@ -130,7 +130,8 @@ Item {
         // Check if user data is cached and valid
         if (!forceRefresh && isCacheValid(userDataCache)) {
             userData = userDataCache.data;
-            totalRepos = userData.public_repos || 0;
+            // Include both public and private repos in the total count
+            totalRepos = (userData.public_repos || 0) + (userData.total_private_repos || 0);
             widthRecalculationNeeded();
             isLoading = false;
             return ;
@@ -144,7 +145,8 @@ Item {
                 return ;
             }
             userData = data;
-            totalRepos = data.public_repos || 0;
+            // Include both public and private repos in the total count
+            totalRepos = (data.public_repos || 0) + (data.total_private_repos || 0);
             widthRecalculationNeeded();
             // Cache the user data
             updateCache(userDataCache, data);

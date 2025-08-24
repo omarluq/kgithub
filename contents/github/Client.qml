@@ -144,13 +144,32 @@ QtObject {
 
     // High-level API methods
     function getUser(username, callback) {
-        var url = baseUrl + "/users/" + encodeURIComponent(username);
+        // Use authenticated endpoint to get private repo count when token is available
+        var url;
+        if (token && token !== "") {
+            // Authenticated endpoint - includes total_private_repos field
+            url = baseUrl + "/user";
+        } else {
+            // Public endpoint - only includes public_repos
+            url = baseUrl + "/users/" + encodeURIComponent(username);
+        }
         makeRequest(url, callback);
     }
 
     function getUserRepositories(username, page = 1, perPage = 5, callback) {
-        var url = baseUrl + "/users/" + encodeURIComponent(username) + "/repos";
-        url += "?sort=updated&per_page=" + perPage + "&page=" + page + "&type=all";
+        // Use authenticated endpoint to get both public and private repos when token is available
+        var url;
+        if (token && token !== "") {
+            // Authenticated endpoint - returns both public and private repos for the authenticated user
+            url = baseUrl + "/user/repos";
+            // Use type=all to get all repos (owned, member, collaborator)
+            // This will include private repos the user has access to
+            url += "?sort=updated&per_page=" + perPage + "&page=" + page + "&type=all";
+        } else {
+            // Public endpoint - only returns public repos
+            url = baseUrl + "/users/" + encodeURIComponent(username) + "/repos";
+            url += "?sort=updated&per_page=" + perPage + "&page=" + page + "&type=all";
+        }
         makeRequest(url, callback);
     }
 
