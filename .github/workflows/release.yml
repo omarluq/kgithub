@@ -27,7 +27,7 @@ jobs:
         run: make package VERSION=${{ steps.version.outputs.VERSION }}
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: kgithub-plasmoid-v${{ steps.version.outputs.VERSION }}.plasmoid
           generate_release_notes: true
