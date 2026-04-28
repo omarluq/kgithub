@@ -10,7 +10,7 @@
     "install-hooks": "pre-commit install"
   },
   "devDependencies": {
-    "pre-commit": "^1.2.2"
+    "pre-commit": "^2.0.0"
   },
   "keywords": ["kde", "plasma", "github", "widget", "plasmoid"],
   "license": "MIT"
